@@ -1,0 +1,152 @@
+* {
+  padding: 0;
+  margin: 0;
+  /* overflow: hidden; */
+}
+
+.dash-main {
+  /* width: 1260px; */
+  width: calc(100vw - 270px);
+  height: calc(100vh - 120px);
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.2);
+  background-color: #F1F4E0;
+  margin-top: 100px;
+  margin-left: 250px;
+  overflow-y: scroll;
+  padding: 20px;
+  border-radius: 5px;
+  border-radius: 12px;
+  /* margin-bottom: 20%; */
+
+
+}
+
+.h-dashboard {
+  font-weight: bold;
+  /* justify-self: end; */
+  font-size: 40px;
+
+}
+
+.container {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px;
+  /* padding: 20px; */
+  /* background-color: #f9f9e5; */
+}
+
+.card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: #e6e6e6;
+  border-radius: 8px;
+  padding: 20px;
+  height: 120px;
+
+  gap: 20px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.card2 {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: #e6e6e6;
+  border-radius: 8px;
+  padding: 20px;
+  height: 120px;
+
+  gap: 20px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+
+.card:hover {
+  transform: scale(1.05);
+  box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+  transition: all 0.3s ease;
+}
+
+.cardText {
+  max-width: 70%;
+}
+
+.title {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 5px 0;
+  color: #222;
+}
+
+.value {
+  font-size: 24px;
+  font-weight: bold;
+  margin: 0;
+  color: #000;
+  font-size: 40px;
+}
+
+.icon {
+  width: 60px;
+  height: 60px;
+  object-fit: contain;
+}
+
+.icon-and-val {
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+  justify-content: space-evenly;
+
+}
+
+.icon-and-val>div {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+
+
+@media (max-width: 1024px) {
+
+  .dash-main {
+    /* width: 1260px; */
+    width: calc(100vw);
+    height: calc(100vh - 120px);
+    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.2);
+    background-color: #F1F4E0;
+    margin-top: 170px;
+    margin-left: 0px;
+    overflow-y: scroll;
+    padding: 20px;
+    border-radius: 5px;
+    border-radius: 12px;
+    /* margin-bottom: 20%; */
+
+
+  }
+}
+
+@media (max-width: 768px) {
+  .dash-main {
+    /* width: 1260px; */
+    width: calc(100vw);
+    height: calc(100vh - 120px);
+    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.2);
+    background-color: #F1F4E0;
+    margin-top: 170px;
+    margin-left: 0px;
+    overflow-y: scroll;
+    padding: 20px;
+    border-radius: 5px;
+    border-radius: 12px;
+    /* margin-bottom: 20%; */
+
+
+  }
+
+}

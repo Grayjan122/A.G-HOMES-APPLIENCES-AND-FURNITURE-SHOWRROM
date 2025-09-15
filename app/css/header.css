@@ -1,0 +1,197 @@
+/* General resets */
+body, html {
+  overflow-x: hidden;
+  margin: 0;
+  padding: 0;
+}
+
+/* Header */
+.header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  background-color: #42CAD6;
+  color: white;
+  padding: 10px 20px;
+  z-index: 1000;
+  height: 80px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* Flex container for header content */
+.header-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+/* Logo section */
+.pic-logo {
+  border-radius: 50%;
+  width: 60px;
+  height: 60px;
+  object-fit: cover;
+  margin-right: 20px;
+}
+
+.logo {
+  font-size: 30px;
+  font-weight: bold;
+  margin-left: 15px;
+  color: white;
+}
+
+/* User profile & bell */
+.profile-logo {
+  border-radius: 50%;
+  width: 50px;
+  height: 50px;
+  object-fit: cover;
+  margin-right: 10px;
+  box-shadow: 2px 0 8px rgba(8, 5, 185, 0.2);
+}
+
+.profile-logo:hover {
+  filter: brightness(1.1);
+}
+
+.bell {
+  padding: 8px;
+  background-color: #4cd9e6;
+  border-radius: 50%;
+  box-shadow: 2px 0 8px rgba(8, 5, 185, 0.2);
+  cursor: pointer;
+}
+
+.bell:hover {
+  background-color: #54e9f6;
+}
+
+.bell-andprof {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  margin-right: 0;
+}
+
+.head-line {
+  display: flex;
+  align-items: center;
+}
+
+/* Dropdown Menu */
+.dropdown-new-menu {
+  position: absolute;
+  top: 100%;
+  right: 10px;
+  width: 200px;
+  background-color: #54e9f6;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  border-radius: 8px;
+  z-index: 2000;
+  padding: 10px 0 20px;
+}
+
+.dropdown-new-menu ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  color: black;
+  font-size: 18px;
+  font-weight: bold;
+}
+
+.dropdown-new-menu li {
+  padding: 10px 16px;
+  cursor: pointer;
+  border-radius: 5px;
+}
+
+.dropdown-new-menu li:hover {
+  background-color: #f0f0f0;
+}
+
+/* Arrow styling if needed */
+.arrowdown {
+  width: 20px;
+  height: 20px;
+}
+
+/* Responsive Breakpoints */
+
+/* Tablets and small desktops */
+@media (max-width: 1024px) {
+  .header{
+     height: 70px;
+    padding: 10px;
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+  }
+  .header-content {
+    flex-direction: row;
+    justify-content: space-between;
+  }
+
+  .logo {
+    font-size: 15px;
+    margin-left: 10px;
+  }
+
+  .pic-logo,
+  .profile-logo {
+    width: 50px;
+    height: 50px;
+  }
+}
+
+/* Mobile (phones) */
+@media (max-width: 768px) {
+  .header {
+    height: 70px;
+    padding: 10px;
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+  }
+
+  .header-content {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .head-line {
+    
+    justify-content: space-between;
+  }
+
+  .bell-andprof {
+    align-self: flex-end;
+    /* margin-top: 10px; */
+  }
+
+  .logo {
+    font-size: 0px;
+    margin-left: 0;
+  }
+
+  .pic-logo,
+  .profile-logo {
+    width: 40px;
+    height: 40px;
+  }
+
+  .dropdown-new-menu {
+    width: 160px;
+    right: 0;
+    font-size: 16px;
+  }
+
+  .dropdown-new-menu ul {
+    font-size: 16px;
+  }
+}

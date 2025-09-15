@@ -1,0 +1,35 @@
+*{
+    padding: 0;
+    margin: 0;
+    /* overflow: hidden; */
+}
+.inventory-main{
+    width: 1260px;
+    /* height: 680px; */
+    /* max-height: 720px; */
+    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.2);
+    background-color: #F1F4E0;
+    margin-top: 100px;
+    margin-left: 250px;
+    /* overflow-y: scroll; */
+    padding: 20px;
+    padding-right: 10px;
+    /* border-radius: 5px; */
+    /* border-radius: 12px; */
+    position: relative;
+    /* added to contain absolute children */
+    /* padding-bottom: 200px; */
+    /* margin-bottom: 100px; */
+    /* padding-bottom: 10px; */
+    
+
+}
+
+.h-inventory{
+    font-weight: bold;
+    /* justify-self: end; */
+    font-size: 40px;
+    
+    
+}
+
