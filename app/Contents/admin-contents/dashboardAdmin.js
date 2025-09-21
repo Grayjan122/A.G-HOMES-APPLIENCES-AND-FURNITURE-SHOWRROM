@@ -19,6 +19,21 @@ import Setting from '@/app/Contents/admin-contents/Setting/page';
 import { useRouter } from "next/navigation";
 
 const DashboardAdmin = ({ onNavigateToSales }) => {
+
+    const PesoSign = ({ size = 24, color = '#007bff' }) => (
+        <span style={{
+            width: 32,
+            fontSize: `${size}px`,
+            color: color,
+            fontWeight: 'bold',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+        }}>
+            ₱
+        </span>
+    );
+
     const [counts, setCounts] = useState({
         prodCount: '0',
         categoryCount: '0',
@@ -83,7 +98,10 @@ const DashboardAdmin = ({ onNavigateToSales }) => {
             .filter(sale => sale.date === todayStr)
             .reduce((total, sale) => total + (parseFloat(sale.amount) || 0), 0);
 
-        return dailyTotal.toFixed(2);
+        return new Intl.NumberFormat('en-PH', {
+            style: 'currency',
+            currency: 'PHP'
+        }).format(dailyTotal);
     };
 
     const calculateWeeklySales = (salesData) => {
@@ -103,7 +121,12 @@ const DashboardAdmin = ({ onNavigateToSales }) => {
             })
             .reduce((total, sale) => total + (parseFloat(sale.amount) || 0), 0);
 
-        return weeklyTotal.toFixed(2);
+
+
+        return new Intl.NumberFormat('en-PH', {
+            style: 'currency',
+            currency: 'PHP'
+        }).format(weeklyTotal);
     };
 
     const calculateMonthlySales = (salesData) => {
@@ -118,7 +141,13 @@ const DashboardAdmin = ({ onNavigateToSales }) => {
             })
             .reduce((total, sale) => total + (parseFloat(sale.amount) || 0), 0);
 
-        return monthlyTotal.toFixed(2);
+
+        return new Intl.NumberFormat('en-PH', {
+            style: 'currency',
+            currency: 'PHP'
+        }).format(monthlyTotal);
+
+
     };
 
     const getSalesByLocation = (salesData, period = 'monthly') => {
@@ -231,7 +260,7 @@ const DashboardAdmin = ({ onNavigateToSales }) => {
         }
     };
 
-    // Chart Components with inline styles
+    // Enhanced Chart Components with better legends and labels
     const BarChart = ({ data, title }) => {
         if (!data || data.length === 0) {
             return (
@@ -261,33 +290,84 @@ const DashboardAdmin = ({ onNavigateToSales }) => {
         }
 
         const maxValue = Math.max(...validData.map(item => item.sales));
+        const minValue = Math.min(...validData.map(item => item.sales));
 
         return (
             <div className="card shadow" style={{ marginBottom: '20px', transition: 'all 0.3s ease' }}>
                 <div className="card-body">
                     <h5 className="card-title">{title}</h5>
-                    <div style={{ height: '300px', display: 'flex', alignItems: 'end', justifyContent: 'space-between' }}>
-                        {validData.map((item, index) => (
-                            <div key={index} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: '1', margin: '0 2px' }}>
-                                <div
-                                    style={{
-                                        width: '100%',
-                                        backgroundColor: '#007bff',
-                                        borderRadius: '4px 4px 0 0',
-                                        height: `${maxValue > 0 ? ((item.sales || 0) / maxValue) * 250 : 5}px`,
-                                        minHeight: '5px',
-                                        position: 'relative',
-                                        transition: 'background-color 0.3s ease',
-                                        cursor: 'pointer'
-                                    }}
-                                    onMouseEnter={(e) => e.target.style.backgroundColor = '#0056b3'}
-                                    onMouseLeave={(e) => e.target.style.backgroundColor = '#007bff'}
-                                    title={`₱${(item.sales || 0).toLocaleString()}`}
-                                >
-                                </div>
-                                <small style={{ marginTop: '8px', color: '#6c757d' }}>{item.day}</small>
+
+                    {/* Chart Container with Y-axis labels */}
+                    <div style={{ height: '320px', display: 'flex' }}>
+                        {/* Y-axis labels */}
+                        <div style={{ width: '60px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', paddingRight: '10px', paddingTop: '20px', paddingBottom: '40px' }}>
+                            <small style={{ color: '#6c757d', fontSize: '11px' }}>₱{maxValue.toLocaleString()}</small>
+                            <small style={{ color: '#6c757d', fontSize: '11px' }}>₱{(maxValue * 0.75).toFixed(0).toLocaleString()}</small>
+                            <small style={{ color: '#6c757d', fontSize: '11px' }}>₱{(maxValue * 0.5).toFixed(0).toLocaleString()}</small>
+                            <small style={{ color: '#6c757d', fontSize: '11px' }}>₱{(maxValue * 0.25).toFixed(0).toLocaleString()}</small>
+                            <small style={{ color: '#6c757d', fontSize: '11px' }}>₱0</small>
+                        </div>
+
+                        {/* Chart Area */}
+                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                            <div style={{ height: '250px', display: 'flex', alignItems: 'end', justifyContent: 'space-between', paddingTop: '20px' }}>
+                                {validData.map((item, index) => (
+                                    <div key={index} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: '1', margin: '0 2px' }}>
+                                        <div
+                                            style={{
+                                                width: '100%',
+                                                backgroundColor: '#007bff',
+                                                borderRadius: '4px 4px 0 0',
+                                                height: `${maxValue > 0 ? ((item.sales || 0) / maxValue) * 220 : 5}px`,
+                                                minHeight: '5px',
+                                                position: 'relative',
+                                                transition: 'background-color 0.3s ease',
+                                                cursor: 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'flex-end',
+                                                justifyContent: 'center',
+                                                color: 'white',
+                                                fontSize: '10px',
+                                                fontWeight: 'bold'
+                                            }}
+                                            onMouseEnter={(e) => e.target.style.backgroundColor = '#0056b3'}
+                                            onMouseLeave={(e) => e.target.style.backgroundColor = '#007bff'}
+                                            title={`${item.day}: ₱${(item.sales || 0).toLocaleString()}`}
+                                        >
+                                            {item.sales > maxValue * 0.1 && (
+                                                <span style={{ padding: '2px', textShadow: '1px 1px 1px rgba(0,0,0,0.5)' }}>
+                                                    ₱{(item.sales / 1000).toFixed(0)}k
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
-                        ))}
+
+                            {/* X-axis labels */}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', paddingLeft: '10px', paddingRight: '10px' }}>
+                                {validData.map((item, index) => (
+                                    <small key={index} style={{ color: '#6c757d', fontWeight: 'bold' }}>{item.day}</small>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Legend and Statistics */}
+                    <div style={{ marginTop: '15px', padding: '10px', backgroundColor: '#f8f9fa', borderRadius: '5px' }}>
+                        <div className="row">
+                            <div className="col-md-6">
+                                <small style={{ color: '#495057', fontWeight: 'bold' }}>Statistics:</small>
+                                <div style={{ fontSize: '12px', color: '#6c757d' }}>
+                                    <div>Max: ₱{maxValue.toLocaleString()}</div>
+                                    <div>Min: ₱{minValue.toLocaleString()}</div>
+                                    <div>Avg: ₱{(validData.reduce((sum, item) => sum + item.sales, 0) / validData.length).toFixed(0).toLocaleString()}</div>
+                                </div>
+                            </div>
+                            <div className="col-md-6">
+                                <small style={{ color: '#495057', fontWeight: 'bold' }}>Total Week: ₱{validData.reduce((sum, item) => sum + item.sales, 0).toLocaleString()}</small>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -328,137 +408,9 @@ const DashboardAdmin = ({ onNavigateToSales }) => {
         const range = maxValue - minValue || 1;
 
         const points = validData.map((item, index) => {
-            const x = validData.length > 1 ? (index / (validData.length - 1)) * 350 : 175;
-            const y = 200 - ((item.sales - minValue) / range) * 180;
-            return `${isNaN(x) ? 175 : x},${isNaN(y) ? 200 : y}`;
-        }).join(' ');
-
-        return (
-            <div className="card shadow" style={{ marginBottom: '20px' }}>
-                <div className="card-body">
-                    <h5 className="card-title">{title}</h5>
-                    <div style={{ height: '300px', textAlign: 'center' }}>
-                        <svg width="350" height="220" style={{ margin: '0 auto' }}>
-                            <defs>
-                                <linearGradient id="gradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                                    <stop offset="0%" style={{ stopColor: '#007bff', stopOpacity: 0.3 }} />
-                                    <stop offset="100%" style={{ stopColor: '#007bff', stopOpacity: 0.1 }} />
-                                </linearGradient>
-                            </defs>
-
-                            {[0, 1, 2, 3, 4].map(i => (
-                                <line
-                                    key={i}
-                                    x1="0"
-                                    y1={40 * i}
-                                    x2="350"
-                                    y2={40 * i}
-                                    stroke="#e9ecef"
-                                    strokeWidth="1"
-                                />
-                            ))}
-
-                            {validData.length > 1 && (
-                                <polygon
-                                    points={`0,200 ${points} 350,200`}
-                                    fill="url(#gradient)"
-                                />
-                            )}
-
-                            {validData.length > 1 && (
-                                <polyline
-                                    points={points}
-                                    fill="none"
-                                    stroke="#007bff"
-                                    strokeWidth="3"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                />
-                            )}
-
-                            {validData.map((item, index) => {
-                                const x = validData.length > 1 ? (index / (validData.length - 1)) * 350 : 175;
-                                const y = 200 - ((item.sales - minValue) / range) * 180;
-                                return (
-                                    <circle
-                                        key={index}
-                                        cx={isNaN(x) ? 175 : x}
-                                        cy={isNaN(y) ? 200 : y}
-                                        r="4"
-                                        fill="#007bff"
-                                        stroke="white"
-                                        strokeWidth="2"
-                                        style={{ cursor: 'pointer' }}
-                                    >
-                                        <title>₱{(item.sales || 0).toLocaleString()}</title>
-                                    </circle>
-                                );
-                            })}
-                        </svg>
-
-                        <div className="d-flex justify-content-between" style={{ marginTop: '10px', paddingLeft: '10px', paddingRight: '10px' }}>
-                            {validData.map((item, index) => (
-                                <small key={index} style={{ color: '#6c757d' }}>{item.day}</small>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-            </div>
-        );
-    };
-
-    // Monthly Line Chart Component - Fixed
-    const MonthlyLineChart = ({ data, title }) => {
-        // Ensure data exists and has valid values
-        if (!data || data.length === 0) {
-            return (
-                <div className="card shadow" style={{ marginBottom: '20px' }}>
-                    <div className="card-body">
-                        <h5 className="card-title">{title}</h5>
-                        <div style={{ height: '350px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <p className="text-muted">No data available</p>
-                        </div>
-                    </div>
-                </div>
-            );
-        }
-
-        // Filter out invalid data and ensure sales values are numbers
-        const validData = data.filter(item =>
-            item &&
-            typeof item.sales === 'number' &&
-            !isNaN(item.sales) &&
-            isFinite(item.sales)
-        );
-
-        if (validData.length === 0) {
-            return (
-                <div className="card shadow" style={{ marginBottom: '20px' }}>
-                    <div className="card-body">
-                        <h5 className="card-title">{title}</h5>
-                        <div style={{ height: '350px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <p className="text-muted">No valid data available</p>
-                        </div>
-                    </div>
-                </div>
-            );
-        }
-
-        const salesValues = validData.map(item => item.sales);
-        const maxValue = Math.max(...salesValues);
-        const minValue = Math.min(...salesValues);
-        const range = maxValue - minValue || 1; // Prevent division by zero
-
-        const points = validData.map((item, index) => {
-            const x = validData.length > 1 ? (index / (validData.length - 1)) * 400 : 200; // Center single point
-            const y = 200 - ((item.sales - minValue) / range) * 180;
-
-            // Ensure x and y are valid numbers
-            return {
-                x: isNaN(x) ? 200 : x,
-                y: isNaN(y) ? 200 : y,
-                ...item
-            };
+            const x = validData.length > 1 ? (index / (validData.length - 1)) * 300 : 150;
+            const y = 180 - ((item.sales - minValue) / range) * 160;
+            return { x: isNaN(x) ? 150 : x, y: isNaN(y) ? 180 : y, ...item };
         });
 
         const pathPoints = points.map(p => `${p.x},${p.y}`).join(' ');
@@ -467,108 +419,122 @@ const DashboardAdmin = ({ onNavigateToSales }) => {
             <div className="card shadow" style={{ marginBottom: '20px' }}>
                 <div className="card-body">
                     <h5 className="card-title">{title}</h5>
-                    <div style={{ height: '350px', textAlign: 'center', position: 'relative' }}>
-                        <svg width="450" height="250" style={{ margin: '0 auto' }}>
-                            <defs>
-                                <linearGradient id="monthlyGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                                    <stop offset="0%" style={{ stopColor: '#28a745', stopOpacity: 0.3 }} />
-                                    <stop offset="100%" style={{ stopColor: '#28a745', stopOpacity: 0.05 }} />
-                                </linearGradient>
-                            </defs>
 
-                            {/* Grid lines */}
-                            {[0, 1, 2, 3, 4, 5].map(i => (
-                                <line
-                                    key={i}
-                                    x1="0"
-                                    y1={i * 40}
-                                    x2="400"
-                                    y2={i * 40}
-                                    stroke="#e9ecef"
-                                    strokeWidth="1"
-                                />
-                            ))}
-
-                            {/* Area fill - only if more than one point */}
-                            {validData.length > 1 && (
-                                <polygon
-                                    points={`0,200 ${pathPoints} 400,200`}
-                                    fill="url(#monthlyGradient)"
-                                />
-                            )}
-
-                            {/* Main line - only if more than one point */}
-                            {validData.length > 1 && (
-                                <polyline
-                                    points={pathPoints}
-                                    fill="none"
-                                    stroke="#28a745"
-                                    strokeWidth="3"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                />
-                            )}
-
-                            {/* Data points */}
-                            {points.map((point, index) => (
-                                <circle
-                                    key={index}
-                                    cx={point.x}
-                                    cy={point.y}
-                                    r={point.isCurrentMonth ? "6" : "4"}
-                                    fill={point.isCurrentMonth ? "#dc3545" : "#28a745"}
-                                    stroke="white"
-                                    strokeWidth="2"
-                                    style={{ cursor: 'pointer', transition: 'all 0.3s ease' }}
-                                    onMouseEnter={(e) => {
-                                        e.target.setAttribute('r', '8');
-                                        e.target.style.filter = 'drop-shadow(0 0 6px rgba(40, 167, 69, 0.6))';
-                                    }}
-                                    onMouseLeave={(e) => {
-                                        e.target.setAttribute('r', point.isCurrentMonth ? '6' : '4');
-                                        e.target.style.filter = 'none';
-                                    }}
-                                >
-                                    <title>{point.month || 'Unknown'}: ₱{(point.sales || 0).toLocaleString()}</title>
-                                </circle>
-                            ))}
-                        </svg>
-
-                        {/* Month labels */}
-                        <div className="d-flex justify-content-between" style={{ marginTop: '10px', paddingLeft: '25px', paddingRight: '25px' }}>
-                            {validData.map((item, index) => (
-                                <small
-                                    key={index}
-                                    style={{
-                                        color: item.isCurrentMonth ? '#dc3545' : '#6c757d',
-                                        fontWeight: item.isCurrentMonth ? 'bold' : 'normal',
-                                        fontSize: '11px'
-                                    }}
-                                >
-                                    {item.month || 'N/A'}
-                                </small>
-                            ))}
+                    <div style={{ display: 'flex' }}>
+                        {/* Y-axis labels */}
+                        <div style={{ width: '50px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', paddingRight: '10px', height: '200px' }}>
+                            <small style={{ color: '#6c757d', fontSize: '10px' }}>₱{maxValue.toLocaleString()}</small>
+                            <small style={{ color: '#6c757d', fontSize: '10px' }}>₱{(minValue + range * 0.75).toFixed(0).toLocaleString()}</small>
+                            <small style={{ color: '#6c757d', fontSize: '10px' }}>₱{(minValue + range * 0.5).toFixed(0).toLocaleString()}</small>
+                            <small style={{ color: '#6c757d', fontSize: '10px' }}>₱{(minValue + range * 0.25).toFixed(0).toLocaleString()}</small>
+                            <small style={{ color: '#6c757d', fontSize: '10px' }}>₱{minValue.toLocaleString()}</small>
                         </div>
 
-                        {/* Legend */}
-                        <div style={{ marginTop: '15px', display: 'flex', justifyContent: 'center', gap: '20px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                <div style={{
-                                    width: '12px',
-                                    height: '12px',
-                                    backgroundColor: '#dc3545',
-                                    borderRadius: '50%'
-                                }}></div>
-                                <small style={{ color: '#6c757d' }}>Current Month</small>
+                        {/* Chart */}
+                        <div style={{ textAlign: 'center', flex: 1 }}>
+                            <svg width="320" height="200">
+                                <defs>
+                                    <linearGradient id="gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                                        <stop offset="0%" style={{ stopColor: '#007bff', stopOpacity: 0.3 }} />
+                                        <stop offset="100%" style={{ stopColor: '#007bff', stopOpacity: 0.1 }} />
+                                    </linearGradient>
+                                </defs>
+
+                                {/* Grid lines */}
+                                {[0, 1, 2, 3, 4].map(i => (
+                                    <line
+                                        key={i}
+                                        x1="0"
+                                        y1={40 * i}
+                                        x2="300"
+                                        y2={40 * i}
+                                        stroke="#e9ecef"
+                                        strokeWidth="1"
+                                    />
+                                ))}
+
+                                {validData.length > 1 && (
+                                    <polygon
+                                        points={`0,180 ${pathPoints} 300,180`}
+                                        fill="url(#gradient)"
+                                    />
+                                )}
+
+                                {validData.length > 1 && (
+                                    <polyline
+                                        points={pathPoints}
+                                        fill="none"
+                                        stroke="#007bff"
+                                        strokeWidth="3"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                    />
+                                )}
+
+                                {points.map((point, index) => (
+                                    <g key={index}>
+                                        <circle
+                                            cx={point.x}
+                                            cy={point.y}
+                                            r="4"
+                                            fill="#007bff"
+                                            stroke="white"
+                                            strokeWidth="2"
+                                            style={{ cursor: 'pointer' }}
+                                        />
+                                        {/* Value labels on points */}
+                                        <text
+                                            x={point.x}
+                                            y={point.y - 10}
+                                            textAnchor="middle"
+                                            fontSize="10"
+                                            fill="#495057"
+                                            fontWeight="bold"
+                                        >
+                                            ₱{(point.sales / 1000).toFixed(0)}k
+                                        </text>
+                                    </g>
+                                ))}
+                            </svg>
+
+                            <div className="d-flex justify-content-between" style={{ marginTop: '10px', paddingLeft: '10px', paddingRight: '10px' }}>
+                                {validData.map((item, index) => (
+                                    <small key={index} style={{ color: '#6c757d', fontWeight: 'bold' }}>{item.day}</small>
+                                ))}
                             </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                <div style={{
-                                    width: '12px',
-                                    height: '12px',
-                                    backgroundColor: '#28a745',
-                                    borderRadius: '50%'
-                                }}></div>
-                                <small style={{ color: '#6c757d' }}>Monthly Performance</small>
+                        </div>
+                    </div>
+
+                    {/* Enhanced Legend */}
+                    <div style={{ marginTop: '15px', padding: '10px', backgroundColor: '#f8f9fa', borderRadius: '5px' }}>
+                        <div className="row">
+                            <div className="col-md-8">
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                        <div style={{
+                                            width: '20px',
+                                            height: '3px',
+                                            backgroundColor: '#007bff',
+                                            borderRadius: '2px'
+                                        }}></div>
+                                        <small style={{ color: '#495057' }}>Sales Trend</small>
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                        <div style={{
+                                            width: '8px',
+                                            height: '8px',
+                                            backgroundColor: '#007bff',
+                                            borderRadius: '50%',
+                                            border: '2px solid white'
+                                        }}></div>
+                                        <small style={{ color: '#495057' }}>Data Points</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="col-md-4">
+                                <small style={{ color: '#495057', fontWeight: 'bold' }}>
+                                    Total: ₱{validData.reduce((sum, item) => sum + item.sales, 0).toLocaleString()}
+                                </small>
                             </div>
                         </div>
                     </div>
@@ -577,9 +543,8 @@ const DashboardAdmin = ({ onNavigateToSales }) => {
         );
     };
 
-    // Yearly Performance Chart Component - Fixed
-    const YearlyChart = ({ data, title }) => {
-        // Ensure data exists and has valid values
+    // Monthly Line Chart Component - Enhanced
+    const MonthlyLineChart = ({ data, title }) => {
         if (!data || data.length === 0) {
             return (
                 <div className="card shadow" style={{ marginBottom: '20px' }}>
@@ -593,7 +558,6 @@ const DashboardAdmin = ({ onNavigateToSales }) => {
             );
         }
 
-        // Filter out invalid data and ensure sales values are numbers
         const validData = data.filter(item =>
             item &&
             typeof item.sales === 'number' &&
@@ -617,16 +581,15 @@ const DashboardAdmin = ({ onNavigateToSales }) => {
         const salesValues = validData.map(item => item.sales);
         const maxValue = Math.max(...salesValues);
         const minValue = Math.min(...salesValues);
-        const range = maxValue - minValue || 1; // Prevent division by zero
+        const range = maxValue - minValue || 1;
 
         const points = validData.map((item, index) => {
-            const x = validData.length > 1 ? (index / (validData.length - 1)) * 350 : 175; // Center single point
-            const y = 200 - ((item.sales - minValue) / range) * 180;
+            const x = validData.length > 1 ? (index / (validData.length - 1)) * 350 : 175;
+            const y = 180 - ((item.sales - minValue) / range) * 160;
 
-            // Ensure x and y are valid numbers
             return {
                 x: isNaN(x) ? 175 : x,
-                y: isNaN(y) ? 200 : y,
+                y: isNaN(y) ? 180 : y,
                 ...item
             };
         });
@@ -637,107 +600,318 @@ const DashboardAdmin = ({ onNavigateToSales }) => {
             <div className="card shadow" style={{ marginBottom: '20px' }}>
                 <div className="card-body">
                     <h5 className="card-title">{title}</h5>
-                    <div style={{ height: '350px', textAlign: 'center' }}>
-                        <svg width="400" height="250" style={{ margin: '0 auto' }}>
-                            <defs>
-                                <linearGradient id="yearlyGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                                    <stop offset="0%" style={{ stopColor: '#6f42c1', stopOpacity: 0.3 }} />
-                                    <stop offset="100%" style={{ stopColor: '#6f42c1', stopOpacity: 0.05 }} />
-                                </linearGradient>
-                            </defs>
 
-                            {/* Grid lines */}
-                            {[0, 1, 2, 3, 4, 5].map(i => (
-                                <line
-                                    key={i}
-                                    x1="0"
-                                    y1={i * 40}
-                                    x2="350"
-                                    y2={i * 40}
-                                    stroke="#e9ecef"
-                                    strokeWidth="1"
-                                />
-                            ))}
-
-                            {/* Area fill - only if more than one point */}
-                            {validData.length > 1 && (
-                                <polygon
-                                    points={`0,200 ${pathPoints} 350,200`}
-                                    fill="url(#yearlyGradient)"
-                                />
-                            )}
-
-                            {/* Main line - only if more than one point */}
-                            {validData.length > 1 && (
-                                <polyline
-                                    points={pathPoints}
-                                    fill="none"
-                                    stroke="#6f42c1"
-                                    strokeWidth="4"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                />
-                            )}
-
-                            {/* Data points */}
-                            {points.map((point, index) => (
-                                <circle
-                                    key={index}
-                                    cx={point.x}
-                                    cy={point.y}
-                                    r={point.isCurrentYear ? "8" : "6"}
-                                    fill={point.isCurrentYear ? "#ffc107" : "#6f42c1"}
-                                    stroke="white"
-                                    strokeWidth="3"
-                                    style={{ cursor: 'pointer', transition: 'all 0.3s ease' }}
-                                    onMouseEnter={(e) => {
-                                        e.target.setAttribute('r', '10');
-                                        e.target.style.filter = 'drop-shadow(0 0 8px rgba(111, 66, 193, 0.6))';
-                                    }}
-                                    onMouseLeave={(e) => {
-                                        e.target.setAttribute('r', point.isCurrentYear ? '8' : '6');
-                                        e.target.style.filter = 'none';
-                                    }}
-                                >
-                                    <title>{point.year || 'Unknown'}: ₱{(point.sales || 0).toLocaleString()}</title>
-                                </circle>
-                            ))}
-                        </svg>
-
-                        {/* Year labels */}
-                        <div className="d-flex justify-content-between" style={{ marginTop: '10px', paddingLeft: '25px', paddingRight: '25px' }}>
-                            {validData.map((item, index) => (
-                                <small
-                                    key={index}
-                                    style={{
-                                        color: item.isCurrentYear ? '#ffc107' : '#6c757d',
-                                        fontWeight: item.isCurrentYear ? 'bold' : 'normal'
-                                    }}
-                                >
-                                    {item.year || 'N/A'}
-                                </small>
-                            ))}
+                    <div style={{ display: 'flex' }}>
+                        {/* Y-axis labels */}
+                        <div style={{ width: '60px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', paddingRight: '10px', height: '200px' }}>
+                            <small style={{ color: '#6c757d', fontSize: '10px' }}>₱{maxValue.toLocaleString()}</small>
+                            <small style={{ color: '#6c757d', fontSize: '10px' }}>₱{(minValue + range * 0.75).toFixed(0).toLocaleString()}</small>
+                            <small style={{ color: '#6c757d', fontSize: '10px' }}>₱{(minValue + range * 0.5).toFixed(0).toLocaleString()}</small>
+                            <small style={{ color: '#6c757d', fontSize: '10px' }}>₱{(minValue + range * 0.25).toFixed(0).toLocaleString()}</small>
+                            <small style={{ color: '#6c757d', fontSize: '10px' }}>₱{minValue.toLocaleString()}</small>
                         </div>
 
-                        {/* Legend */}
-                        <div style={{ marginTop: '15px', display: 'flex', justifyContent: 'center', gap: '20px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                <div style={{
-                                    width: '12px',
-                                    height: '12px',
-                                    backgroundColor: '#ffc107',
-                                    borderRadius: '50%'
-                                }}></div>
-                                <small style={{ color: '#6c757d' }}>Current Year</small>
+                        <div style={{ textAlign: 'center', flex: 1 }}>
+                            <svg width="380" height="200">
+                                <defs>
+                                    <linearGradient id="monthlyGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                                        <stop offset="0%" style={{ stopColor: '#28a745', stopOpacity: 0.3 }} />
+                                        <stop offset="100%" style={{ stopColor: '#28a745', stopOpacity: 0.05 }} />
+                                    </linearGradient>
+                                </defs>
+
+                                {/* Grid lines */}
+                                {[0, 1, 2, 3, 4].map(i => (
+                                    <line
+                                        key={i}
+                                        x1="0"
+                                        y1={i * 40}
+                                        x2="350"
+                                        y2={i * 40}
+                                        stroke="#e9ecef"
+                                        strokeWidth="1"
+                                    />
+                                ))}
+
+                                {validData.length > 1 && (
+                                    <polygon
+                                        points={`0,180 ${pathPoints} 350,180`}
+                                        fill="url(#monthlyGradient)"
+                                    />
+                                )}
+
+                                {validData.length > 1 && (
+                                    <polyline
+                                        points={pathPoints}
+                                        fill="none"
+                                        stroke="#28a745"
+                                        strokeWidth="3"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                    />
+                                )}
+
+                                {points.map((point, index) => (
+                                    <g key={index}>
+                                        <circle
+                                            cx={point.x}
+                                            cy={point.y}
+                                            r={point.isCurrentMonth ? "6" : "4"}
+                                            fill={point.isCurrentMonth ? "#dc3545" : "#28a745"}
+                                            stroke="white"
+                                            strokeWidth="2"
+                                            style={{ cursor: 'pointer' }}
+                                        />
+                                        {/* Value labels */}
+                                        <text
+                                            x={point.x}
+                                            y={point.y - 12}
+                                            textAnchor="middle"
+                                            fontSize="9"
+                                            fill={point.isCurrentMonth ? "#dc3545" : "#28a745"}
+                                            fontWeight="bold"
+                                        >
+                                            ₱{(point.sales / 1000).toFixed(0)}k
+                                        </text>
+                                    </g>
+                                ))}
+                            </svg>
+
+                            <div className="d-flex justify-content-between" style={{ marginTop: '10px', paddingLeft: '15px', paddingRight: '15px' }}>
+                                {validData.map((item, index) => (
+                                    <small
+                                        key={index}
+                                        style={{
+                                            color: item.isCurrentMonth ? '#dc3545' : '#6c757d',
+                                            fontWeight: item.isCurrentMonth ? 'bold' : 'normal',
+                                            fontSize: '11px'
+                                        }}
+                                    >
+                                        {item.month || 'N/A'}
+                                    </small>
+                                ))}
                             </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                <div style={{
-                                    width: '12px',
-                                    height: '12px',
-                                    backgroundColor: '#6f42c1',
-                                    borderRadius: '50%'
-                                }}></div>
-                                <small style={{ color: '#6c757d' }}>Yearly Trend</small>
+                        </div>
+                    </div>
+
+                    {/* Enhanced Legend */}
+                    <div style={{ marginTop: '15px', padding: '10px', backgroundColor: '#f8f9fa', borderRadius: '5px' }}>
+                        <div className="row">
+                            <div className="col-md-6">
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                        <div style={{
+                                            width: '12px',
+                                            height: '12px',
+                                            backgroundColor: '#dc3545',
+                                            borderRadius: '50%'
+                                        }}></div>
+                                        <small style={{ color: '#6c757d' }}>Current Month</small>
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                        <div style={{
+                                            width: '12px',
+                                            height: '12px',
+                                            backgroundColor: '#28a745',
+                                            borderRadius: '50%'
+                                        }}></div>
+                                        <small style={{ color: '#6c757d' }}>Monthly Performance</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="col-md-6">
+                                <small style={{ color: '#495057', fontWeight: 'bold' }}>
+                                    YTD Total: ₱{validData.reduce((sum, item) => sum + item.sales, 0).toLocaleString()}
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    // Yearly Performance Chart Component - Enhanced
+    const YearlyChart = ({ data, title }) => {
+        if (!data || data.length === 0) {
+            return (
+                <div className="card shadow" style={{ marginBottom: '20px' }}>
+                    <div className="card-body">
+                        <h5 className="card-title">{title}</h5>
+                        <div style={{ height: '350px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <p className="text-muted">No data available</p>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        const validData = data.filter(item =>
+            item &&
+            typeof item.sales === 'number' &&
+            !isNaN(item.sales) &&
+            isFinite(item.sales)
+        );
+
+        if (validData.length === 0) {
+            return (
+                <div className="card shadow" style={{ marginBottom: '20px' }}>
+                    <div className="card-body">
+                        <h5 className="card-title">{title}</h5>
+                        <div style={{ height: '350px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <p className="text-muted">No valid data available</p>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        const salesValues = validData.map(item => item.sales);
+        const maxValue = Math.max(...salesValues);
+        const minValue = Math.min(...salesValues);
+        const range = maxValue - minValue || 1;
+
+        const points = validData.map((item, index) => {
+            const x = validData.length > 1 ? (index / (validData.length - 1)) * 300 : 150;
+            const y = 180 - ((item.sales - minValue) / range) * 160;
+
+            return {
+                x: isNaN(x) ? 150 : x,
+                y: isNaN(y) ? 180 : y,
+                ...item
+            };
+        });
+
+        const pathPoints = points.map(p => `${p.x},${p.y}`).join(' ');
+
+        return (
+            <div className="card shadow" style={{ marginBottom: '20px' }}>
+                <div className="card-body">
+                    <h5 className="card-title">{title}</h5>
+
+                    <div style={{ display: 'flex' }}>
+                        {/* Y-axis labels */}
+                        <div style={{ width: '60px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', paddingRight: '10px', height: '200px' }}>
+                            <small style={{ color: '#6c757d', fontSize: '10px' }}>₱{maxValue.toLocaleString()}</small>
+                            <small style={{ color: '#6c757d', fontSize: '10px' }}>₱{(minValue + range * 0.75).toFixed(0).toLocaleString()}</small>
+                            <small style={{ color: '#6c757d', fontSize: '10px' }}>₱{(minValue + range * 0.5).toFixed(0).toLocaleString()}</small>
+                            <small style={{ color: '#6c757d', fontSize: '10px' }}>₱{(minValue + range * 0.25).toFixed(0).toLocaleString()}</small>
+                            <small style={{ color: '#6c757d', fontSize: '10px' }}>₱{minValue.toLocaleString()}</small>
+                        </div>
+
+                        <div style={{ textAlign: 'center', flex: 1 }}>
+                            <svg width="330" height="200">
+                                <defs>
+                                    <linearGradient id="yearlyGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                                        <stop offset="0%" style={{ stopColor: '#6f42c1', stopOpacity: 0.3 }} />
+                                        <stop offset="100%" style={{ stopColor: '#6f42c1', stopOpacity: 0.05 }} />
+                                    </linearGradient>
+                                </defs>
+
+                                {/* Grid lines */}
+                                {[0, 1, 2, 3, 4].map(i => (
+                                    <line
+                                        key={i}
+                                        x1="0"
+                                        y1={i * 40}
+                                        x2="300"
+                                        y2={i * 40}
+                                        stroke="#e9ecef"
+                                        strokeWidth="1"
+                                    />
+                                ))}
+
+                                {validData.length > 1 && (
+                                    <polygon
+                                        points={`0,180 ${pathPoints} 300,180`}
+                                        fill="url(#yearlyGradient)"
+                                    />
+                                )}
+
+                                {validData.length > 1 && (
+                                    <polyline
+                                        points={pathPoints}
+                                        fill="none"
+                                        stroke="#6f42c1"
+                                        strokeWidth="4"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                    />
+                                )}
+
+                                {points.map((point, index) => (
+                                    <g key={index}>
+                                        <circle
+                                            cx={point.x}
+                                            cy={point.y}
+                                            r={point.isCurrentYear ? "8" : "6"}
+                                            fill={point.isCurrentYear ? "#ffc107" : "#6f42c1"}
+                                            stroke="white"
+                                            strokeWidth="3"
+                                            style={{ cursor: 'pointer' }}
+                                        />
+                                        {/* Value labels */}
+                                        <text
+                                            x={point.x}
+                                            y={point.y - 15}
+                                            textAnchor="middle"
+                                            fontSize="10"
+                                            fill={point.isCurrentYear ? "#ffc107" : "#6f42c1"}
+                                            fontWeight="bold"
+                                        >
+                                            ₱{(point.sales / 1000000).toFixed(1)}M
+                                        </text>
+                                    </g>
+                                ))}
+                            </svg>
+
+                            <div className="d-flex justify-content-between" style={{ marginTop: '10px', paddingLeft: '15px', paddingRight: '15px' }}>
+                                {validData.map((item, index) => (
+                                    <small
+                                        key={index}
+                                        style={{
+                                            color: item.isCurrentYear ? '#ffc107' : '#6c757d',
+                                            fontWeight: item.isCurrentYear ? 'bold' : 'normal'
+                                        }}
+                                    >
+                                        {item.year || 'N/A'}
+                                    </small>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Enhanced Legend */}
+                    <div style={{ marginTop: '15px', padding: '10px', backgroundColor: '#f8f9fa', borderRadius: '5px' }}>
+                        <div className="row">
+                            <div className="col-md-6">
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                        <div style={{
+                                            width: '12px',
+                                            height: '12px',
+                                            backgroundColor: '#ffc107',
+                                            borderRadius: '50%'
+                                        }}></div>
+                                        <small style={{ color: '#6c757d' }}>Current Year</small>
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                        <div style={{
+                                            width: '12px',
+                                            height: '12px',
+                                            backgroundColor: '#6f42c1',
+                                            borderRadius: '50%'
+                                        }}></div>
+                                        <small style={{ color: '#6c757d' }}>Historical Years</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="col-md-6">
+                                <small style={{ color: '#495057', fontWeight: 'bold' }}>
+                                    Growth: {validData.length > 1 ?
+                                        ((validData[validData.length - 1].sales - validData[validData.length - 2].sales) / validData[validData.length - 2].sales * 100).toFixed(1) + '%'
+                                        : 'N/A'}
+                                </small>
                             </div>
                         </div>
                     </div>
@@ -776,7 +950,7 @@ const DashboardAdmin = ({ onNavigateToSales }) => {
 
         const total = validData.reduce((sum, item) => sum + item.value, 0);
         let cumulativePercentage = 0;
-        const colors = ['#007bff', '#28a745', '#ffc107', '#dc3545', '#6f42c1'];
+        const colors = ['#007bff', '#28a745', '#ffc107', '#dc3545', '#6f42c1', '#17a2b8'];
 
         const slices = validData.map((item, index) => {
             const percentage = (item.value / total) * 100;
@@ -804,40 +978,167 @@ const DashboardAdmin = ({ onNavigateToSales }) => {
                     <h5 className="card-title">{title}</h5>
                     <div className="row align-items-center">
                         <div className="col-md-6">
-                            <svg width="200" height="200" style={{ transform: 'rotate(-90deg)' }}>
-                                {slices.map((slice, index) => (
-                                    <path
-                                        key={index}
-                                        d={slice.pathData}
-                                        fill={slice.color}
-                                        stroke="white"
-                                        strokeWidth="2"
-                                        style={{ cursor: 'pointer', transition: 'opacity 0.3s ease' }}
-                                        onMouseEnter={(e) => e.target.style.opacity = '0.8'}
-                                        onMouseLeave={(e) => e.target.style.opacity = '1'}
-                                    >
-                                        <title>{slice.name}: ₱{slice.value.toLocaleString()} ({slice.percentage.toFixed(1)}%)</title>
-                                    </path>
-                                ))}
-                            </svg>
+                            <div style={{ position: 'relative', textAlign: 'center' }}>
+                                <svg width="200" height="200" style={{ transform: 'rotate(-90deg)' }}>
+                                    {slices.map((slice, index) => (
+                                        <path
+                                            key={index}
+                                            d={slice.pathData}
+                                            fill={slice.color}
+                                            stroke="white"
+                                            strokeWidth="2"
+                                            style={{ cursor: 'pointer', transition: 'opacity 0.3s ease' }}
+                                            onMouseEnter={(e) => e.target.style.opacity = '0.8'}
+                                            onMouseLeave={(e) => e.target.style.opacity = '1'}
+                                        >
+                                            <title>{slice.name}: ₱{slice.value.toLocaleString()} ({slice.percentage.toFixed(1)}%)</title>
+                                        </path>
+                                    ))}
+                                </svg>
+                                {/* Center total */}
+                                <div style={{
+                                    position: 'absolute',
+                                    top: '50%',
+                                    left: '50%',
+                                    transform: 'translate(-50%, -50%)',
+                                    textAlign: 'center'
+                                }}>
+                                    <div style={{ fontSize: '12px', color: '#6c757d', fontWeight: 'bold' }}>Total</div>
+                                    <div style={{ fontSize: '14px', color: '#495057', fontWeight: 'bold' }}>₱{total.toLocaleString()}</div>
+                                </div>
+                            </div>
                         </div>
                         <div className="col-md-6">
-                            {slices.map((slice, index) => (
-                                <div key={index} className="d-flex align-items-center mb-2">
-                                    <div
-                                        style={{
-                                            width: '16px',
-                                            height: '16px',
-                                            backgroundColor: slice.color,
-                                            borderRadius: '50%',
-                                            marginRight: '8px'
-                                        }}
-                                    ></div>
-                                    <small style={{ color: '#495057' }}>
-                                        {slice.name} ({slice.percentage.toFixed(1)}%)
-                                    </small>
-                                </div>
-                            ))}
+                            <div style={{ maxHeight: '180px', overflowY: 'auto' }}>
+                                {slices.map((slice, index) => (
+                                    <div key={index} className="d-flex align-items-center justify-content-between mb-2" style={{ padding: '4px 8px', borderRadius: '4px', backgroundColor: index % 2 === 0 ? '#f8f9fa' : 'white' }}>
+                                        <div className="d-flex align-items-center">
+                                            <div
+                                                style={{
+                                                    width: '16px',
+                                                    height: '16px',
+                                                    backgroundColor: slice.color,
+                                                    borderRadius: '3px',
+                                                    marginRight: '8px'
+                                                }}
+                                            ></div>
+                                            <small style={{ color: '#495057', fontWeight: '500' }}>
+                                                {slice.name}
+                                            </small>
+                                        </div>
+                                        <div style={{ textAlign: 'right' }}>
+                                            <div style={{ fontSize: '11px', color: '#6c757d' }}>
+                                                {slice.percentage.toFixed(1)}%
+                                            </div>
+                                            <div style={{ fontSize: '12px', color: '#495057', fontWeight: 'bold' }}>
+                                                ₱{(slice.value / 1000).toFixed(0)}k
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Summary */}
+                            <div style={{ marginTop: '10px', padding: '8px', backgroundColor: '#e9ecef', borderRadius: '4px' }}>
+                                <small style={{ color: '#495057' }}>
+                                    <strong>Locations:</strong> {slices.length} | <strong>Avg:</strong> ₱{(total / slices.length).toFixed(0).toLocaleString()}
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    // Enhanced Recent Sales Table Component
+    const RecentSalesTable = ({ salesData, title }) => {
+        const recentSales = salesData.slice(-10).reverse();
+
+        return (
+            <div className="card shadow" style={{ marginBottom: '20px' }}>
+                <div className="card-body">
+                    <div className="d-flex justify-content-between align-items-center mb-3">
+                        <h5 className="card-title mb-0">{title}</h5>
+                        <small className="text-muted">Last 10 transactions</small>
+                    </div>
+
+                    <div className="table-responsive" style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                        <table className="table table-hover table-sm">
+                            <thead className="thead-light" style={{ position: 'sticky', top: 0, backgroundColor: '#f8f9fa', zIndex: 10 }}>
+                                <tr>
+                                    <th style={{ border: 'none', padding: '12px 8px', fontSize: '13px', fontWeight: '600' }}>Date</th>
+                                    <th style={{ border: 'none', padding: '12px 8px', fontSize: '13px', fontWeight: '600' }}>Location</th>
+                                    <th style={{ border: 'none', padding: '12px 8px', fontSize: '13px', fontWeight: '600' }}>Transaction Type</th>
+                                    <th style={{ border: 'none', padding: '12px 8px', fontSize: '13px', fontWeight: '600', textAlign: 'right' }}>Amount</th>
+                                    <th style={{ border: 'none', padding: '12px 8px', fontSize: '13px', fontWeight: '600', textAlign: 'center' }}>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {recentSales.map((sale, index) => {
+                                    const isToday = new Date(sale.date).toDateString() === new Date().toDateString();
+                                    return (
+                                        <tr key={index} style={{
+                                            backgroundColor: isToday ? '#fff3cd' : (index % 2 === 0 ? '#f8f9fa' : 'white'),
+                                            borderLeft: isToday ? '3px solid #ffc107' : 'none'
+                                        }}>
+                                            <td style={{ padding: '10px 8px', fontSize: '12px', border: 'none' }}>
+                                                <div style={{ fontWeight: '500', color: '#495057' }}>
+                                                    {new Date(sale.date).toLocaleDateString()}
+                                                </div>
+                                                <div style={{ fontSize: '11px', color: '#6c757d' }}>
+                                                    {new Date(sale.date).toLocaleDateString('en-US', { weekday: 'short' })}
+                                                </div>
+                                            </td>
+                                            <td style={{ padding: '10px 8px', fontSize: '12px', border: 'none' }}>
+                                                <div style={{ fontWeight: '500', color: '#495057' }}>
+                                                    {sale.location_name || 'Unknown'}
+                                                </div>
+                                            </td>
+                                             <td style={{ padding: '10px 8px', fontSize: '12px', border: 'none' }}>
+                                                <div style={{ fontWeight: '500', color: '#495057' }}>
+                                                    {sale.sales_from || 'Unknown'}
+                                                </div>
+                                            </td>
+                                            <td style={{ padding: '10px 8px', fontSize: '12px', border: 'none', textAlign: 'right' }}>
+                                                <div style={{ fontWeight: 'bold', color: '#28a745', fontSize: '13px' }}>
+                                                    ₱{(parseFloat(sale.amount) || 0).toLocaleString()}
+                                                </div>
+                                            </td>
+                                            <td style={{ padding: '10px 8px', fontSize: '12px', border: 'none', textAlign: 'center' }}>
+                                                <span
+                                                    className="badge"
+                                                    style={{
+                                                        backgroundColor: '#d4edda',
+                                                        color: '#155724',
+                                                        fontSize: '10px',
+                                                        padding: '4px 8px',
+                                                        borderRadius: '12px'
+                                                    }}
+                                                >
+                                                    Completed
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {/* Sales Summary */}
+                    <div style={{ marginTop: '15px', padding: '10px', backgroundColor: '#f8f9fa', borderRadius: '5px' }}>
+                        <div className="row">
+                            <div className="col-md-6">
+                                <small style={{ color: '#495057', fontWeight: 'bold' }}>
+                                    Recent Total: ₱{recentSales.reduce((sum, sale) => sum + (parseFloat(sale.amount) || 0), 0).toLocaleString()}
+                                </small>
+                            </div>
+                            <div className="col-md-6">
+                                <small style={{ color: '#495057' }}>
+                                    Average: ₱{recentSales.length > 0 ? (recentSales.reduce((sum, sale) => sum + (parseFloat(sale.amount) || 0), 0) / recentSales.length).toLocaleString() : '0'}
+                                </small>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -862,7 +1163,7 @@ const DashboardAdmin = ({ onNavigateToSales }) => {
         });
     }
 
-    // Prepare monthly chart data - Fixed
+    // Prepare monthly chart data
     const monthlyTrendData = [];
     const currentYear = new Date().getFullYear();
     const currentMonth = new Date().getMonth();
@@ -874,30 +1175,27 @@ const DashboardAdmin = ({ onNavigateToSales }) => {
                 const saleDate = new Date(sale.date);
                 return saleDate.getMonth() === i && saleDate.getFullYear() === currentYear;
             })
-            .reduce((total, sale) => total + (parseFloat(sale.amount) || 0), 0); // Ensure parseFloat returns a number
+            .reduce((total, sale) => total + (parseFloat(sale.amount) || 0), 0);
 
         monthlyTrendData.push({
             month: monthNames[i],
-            sales: isNaN(monthlyAmount) ? 0 : monthlyAmount, // Ensure sales is never NaN
+            sales: isNaN(monthlyAmount) ? 0 : monthlyAmount,
             isCurrentMonth: i === currentMonth
         });
     }
 
-    // Prepare yearly chart data - Fixed
+    // Prepare yearly chart data
     const yearlyTrendData = [];
     const currentYearValue = new Date().getFullYear();
 
-    // Get unique years from sales data
     const availableYears = [...new Set(salesByInvoice.map(sale => {
         const year = new Date(sale.date).getFullYear();
-        return isNaN(year) ? null : year; // Filter out invalid years
+        return isNaN(year) ? null : year;
     }).filter(year => year !== null))];
 
-    // If no years available, show last 5 years including current
     const yearsToShow = availableYears.length > 0 ? availableYears :
         Array.from({ length: 5 }, (_, i) => currentYearValue - 4 + i);
 
-    // Sort years and ensure we have at least current year
     const sortedYears = [...new Set([...yearsToShow, currentYearValue])].sort();
 
     sortedYears.forEach(year => {
@@ -906,11 +1204,11 @@ const DashboardAdmin = ({ onNavigateToSales }) => {
                 const saleDate = new Date(sale.date);
                 return saleDate.getFullYear() === year;
             })
-            .reduce((total, sale) => total + (parseFloat(sale.amount) || 0), 0); // Ensure parseFloat returns a number
+            .reduce((total, sale) => total + (parseFloat(sale.amount) || 0), 0);
 
         yearlyTrendData.push({
             year: year.toString(),
-            sales: isNaN(yearlyAmount) ? 0 : yearlyAmount, // Ensure sales is never NaN
+            sales: isNaN(yearlyAmount) ? 0 : yearlyAmount,
             isCurrentYear: year === currentYearValue
         });
     });
@@ -955,9 +1253,9 @@ const DashboardAdmin = ({ onNavigateToSales }) => {
                                 <div className="d-flex justify-content-between align-items-center">
                                     <div>
                                         <p className="text-muted mb-1" style={{ fontSize: '14px' }}>Daily Sales</p>
-                                       
-                                        
-                                        <h3 className="font-weight-bold mb-0"> ₱{(counts.dailySales || 0).toLocaleString()}</h3>
+
+
+                                        <h3 className="font-weight-bold mb-0"> {(counts.dailySales || 0).toLocaleString()}</h3>
 
                                         <div className="d-flex align-items-center mt-2">
                                             <TrendingUp size={16} color="#28a745" className="me-1" />
@@ -965,7 +1263,7 @@ const DashboardAdmin = ({ onNavigateToSales }) => {
                                         </div>
                                     </div>
                                     <div style={{ backgroundColor: '#e3f2fd', padding: '12px', borderRadius: '50%' }}>
-                                        <DollarSign size={24} color="#007bff" />
+                                        <PesoSign size={24} color="#007bff" />
                                     </div>
                                 </div>
                             </div>
@@ -989,7 +1287,7 @@ const DashboardAdmin = ({ onNavigateToSales }) => {
                                 <div className="d-flex justify-content-between align-items-center">
                                     <div>
                                         <p className="text-muted mb-1" style={{ fontSize: '14px' }}>Weekly Sales</p>
-                                        <h3 className="font-weight-bold mb-0">₱{counts.weeklySales}</h3>
+                                        <h3 className="font-weight-bold mb-0">{counts.weeklySales}</h3>
                                         <div className="d-flex align-items-center mt-2">
                                             <TrendingUp size={16} color="#28a745" className="me-1" />
                                             <small className="text-success">This week</small>
@@ -1020,7 +1318,7 @@ const DashboardAdmin = ({ onNavigateToSales }) => {
                                 <div className="d-flex justify-content-between align-items-center">
                                     <div>
                                         <p className="text-muted mb-1" style={{ fontSize: '14px' }}>Monthly Sales</p>
-                                        <h3 className="font-weight-bold mb-0">₱{counts.montlySales}</h3>
+                                        <h3 className="font-weight-bold mb-0">{counts.montlySales}</h3>
                                         <div className="d-flex align-items-center mt-2">
                                             <TrendingUp size={16} color="#6f42c1" className="me-1" />
                                             <small style={{ color: '#6f42c1' }}>This month</small>
@@ -1113,7 +1411,7 @@ const DashboardAdmin = ({ onNavigateToSales }) => {
                 {/* Charts Section */}
                 {salesByInvoice.length > 0 && (
                     <>
-                        {/* Monthly & Yearly Charts - NEW SECTION */}
+                        {/* Monthly & Yearly Charts */}
                         <div className="row mb-4">
                             <div className="col-md-6">
                                 <MonthlyLineChart data={monthlyTrendData} title="Monthly Performance (Current Year)" />
@@ -1123,6 +1421,7 @@ const DashboardAdmin = ({ onNavigateToSales }) => {
                             </div>
                         </div>
 
+                        {/* Weekly Trend & Location Sales */}
                         <div className="row mb-4">
                             <div className="col-md-6">
                                 <LineChart data={weeklyTrendData} title="Weekly Sales Trend" />
@@ -1134,40 +1433,13 @@ const DashboardAdmin = ({ onNavigateToSales }) => {
                             </div>
                         </div>
 
+                        {/* Daily Performance & Recent Sales - Now using half width */}
                         <div className="row mb-4">
-                            <div className="col-12">
+                            <div className="col-md-6">
                                 <BarChart data={weeklyTrendData} title="Daily Sales Performance" />
                             </div>
-                        </div>
-
-                        {/* Recent Sales Table */}
-                        <div className="card">
-                            <div className="card-body">
-                                <h5 className="card-title">Recent Sales</h5>
-                                <div className="table-responsive">
-                                    <table className="table table-hover">
-                                        <thead className="thead-light">
-                                            <tr>
-                                                <th>Date</th>
-                                                <th>Location</th>
-                                                <th>Amount</th>
-                                                <th>Status</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {salesByInvoice.slice(-5).reverse().map((sale, index) => (
-                                                <tr key={index}>
-                                                    <td>{new Date(sale.date).toLocaleDateString()}</td>
-                                                    <td>{sale.location_name || 'Unknown'}</td>
-                                                    <td><strong>₱{(parseFloat(sale.amount) || 0).toLocaleString()}</strong></td>
-                                                    <td>
-                                                        <span className="badge badge-success" style={{ color: 'green' }}>Completed</span>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
+                            <div className="col-md-6">
+                                <RecentSalesTable salesData={salesByInvoice} title="Recent Sales" />
                             </div>
                         </div>
                     </>

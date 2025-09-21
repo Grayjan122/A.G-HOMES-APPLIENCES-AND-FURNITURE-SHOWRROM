@@ -42,37 +42,37 @@ export default function LoginPage() {
 
   // Custom Eye Icon SVG
   const EyeIcon = () => (
-    <svg 
-      width="25" 
-      height="25" 
-      viewBox="0 0 24 24" 
-      fill="none" 
-      stroke="currentColor" 
-      strokeWidth="2" 
-      strokeLinecap="round" 
+    <svg
+      width="25"
+      height="25"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
       strokeLinejoin="round"
       style={{ color: '#666' }}
     >
-      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-      <circle cx="12" cy="12" r="3"/>
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+      <circle cx="12" cy="12" r="3" />
     </svg>
   );
 
   // Custom Eye Off Icon SVG
   const EyeOffIcon = () => (
-    <svg 
-      width="25" 
-      height="25" 
-      viewBox="0 0 24 24" 
-      fill="none" 
-      stroke="currentColor" 
-      strokeWidth="2" 
-      strokeLinecap="round" 
+    <svg
+      width="25"
+      height="25"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
       strokeLinejoin="round"
       style={{ color: '#666' }}
     >
-      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
-      <line x1="1" y1="1" x2="23" y2="23"/>
+      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+      <line x1="1" y1="1" x2="23" y2="23" />
     </svg>
   );
 
@@ -153,15 +153,22 @@ export default function LoginPage() {
 
     sessionStorage.setItem('loginSuccess', 'true');
     sessionStorage.setItem('baseURL', 'http://localhost/capstone-api/api/');
-    
+
     const correctAnswer = num1 + num2;
     if (parseInt(userAnswer) !== correctAnswer) {
-      setModalHeader('Authentication Failed⚠️');
-      setModalBody('Please solve the authentication question correctly!');
-      setShow(true);
+      // setModalHeader('Authentication Failed⚠️');
+      // setModalBody('Please solve the authentication question correctly!');
+      // setShow(true);
+      showAlertError({
+        icon: "error",
+        title: "Opss!",
+        text: 'Please solve the authentication question correctly!',
+        button: 'Try Again'
+      });
+
       return;
     }
-    
+
     const baseURL = sessionStorage.getItem('baseURL');
     const url = baseURL + 'login.php';
     const LogCridentials = { username: email, password: password };
@@ -212,9 +219,16 @@ export default function LoginPage() {
         OnlineState(response.data[0].account_id);
 
       } else {
-        setModalHeader('Account not found⚠️');
-        setModalBody('User credentials are not found, please check your email and password!');
-        setShow(true);
+        // setModalHeader('Account not found⚠️');
+        // setModalBody('User credentials are not found, please check your email and password!');
+        // setShow(true);
+        showAlertError({
+          icon: "error",
+          title: "Account not found⚠️",
+          text: 'User credentials are not found, please check your email and password!',
+          button: 'Try Again'
+        });
+
         return;
       }
 
@@ -222,9 +236,12 @@ export default function LoginPage() {
       return;
 
     } else {
-      setModalHeader('Account not found⚠️');
-      setModalBody('User credentials are not found, please check your email and password!');
-      setShow(true);
+      showAlertError({
+          icon: "error",
+          title: "Account not found⚠️",
+          text: 'User credentials are not found, please check your email and password!',
+          button: 'Try Again'
+        });
     }
 
     generateRandomNumbers();
@@ -259,7 +276,7 @@ export default function LoginPage() {
           </div>
           <form onSubmit={login} className='log-in-form'>
             <h2 className='Log-1'>Sign in to start your session</h2>
-            
+
             <div>
               <label className='label'>
                 Username:
@@ -273,7 +290,7 @@ export default function LoginPage() {
                 id='email'
               />
             </div>
-            
+
             {/* Enhanced password input with toggle */}
             <div style={{ marginTop: '10px' }}>
               <label className='label'>
@@ -288,7 +305,7 @@ export default function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   autoComplete='current-password'
-                  style={{ 
+                  style={{
                     paddingRight: '45px',
                     width: '100%'
                   }}
@@ -312,7 +329,7 @@ export default function LoginPage() {
                     transition: 'all 0.2s ease',
                     zIndex: 2,
                     color: '#666',
-                    
+
                   }}
                   onMouseEnter={(e) => {
                     // e.target.style.backgroundColor = 'rgba(102, 126, 234, 0.1)';
@@ -327,7 +344,7 @@ export default function LoginPage() {
                 </button>
               </div>
             </div>
-            
+
             <div style={{ marginTop: '10px' }} className='athen'>
               <label className='label-1'>{num1}</label>
               <label className='operator'>+</label>
@@ -346,7 +363,7 @@ export default function LoginPage() {
                 <Image src={'/assets/images/refresh.png'} width={60} height={55} alt="Refresh" />
               </button>
             </div>
-            
+
             <button type="submit" className='sub-button'>
               Login
             </button>

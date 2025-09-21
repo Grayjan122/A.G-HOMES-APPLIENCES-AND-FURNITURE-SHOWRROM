@@ -13,7 +13,7 @@ const SaleAdmin = () => {
 
     const [salesByInvoice, setSalesByInvoice] = useState([]);
     const [locationList, setLocationList] = useState([]);
-    
+
     // Filter states
     const [locationFilter, setLocationFilter] = useState('');
     const [salesFromFilter, setSalesFromFilter] = useState('');
@@ -194,11 +194,11 @@ const SaleAdmin = () => {
             if (reportType === 'date_range') {
                 const fromDate = new Date(reportDateFrom);
                 const toDate = new Date(reportDateTo);
-                
+
                 // Set time to start and end of day for proper comparison
                 fromDate.setHours(0, 0, 0, 0);
                 toDate.setHours(23, 59, 59, 999);
-                
+
                 inDateRange = saleDate >= fromDate && saleDate <= toDate;
             } else if (reportType === 'monthly') {
                 const saleMonth = saleDate.toISOString().slice(0, 7); // YYYY-MM format
@@ -271,7 +271,7 @@ const SaleAdmin = () => {
             ? locationList.find(loc => loc.location_id === reportLocationFilter)?.location_name || 'Selected Location'
             : 'All Locations';
 
-        const periodText = reportData.reportType === 'monthly' 
+        const periodText = reportData.reportType === 'monthly'
             ? `Month: ${new Date(reportData.dateRange.from).toLocaleDateString('en-US', { year: 'numeric', month: 'long' })}`
             : `Period: ${new Date(reportData.dateRange.from).toLocaleDateString()} - ${new Date(reportData.dateRange.to).toLocaleDateString()}`;
 
@@ -423,7 +423,10 @@ const SaleAdmin = () => {
                     <h1 className='h-customer'>SALES MANAGEMENT</h1>
 
                     {/* Sales Report Button */}
-                    <button
+                    <div>
+                        <button className='add-pro-bttn'  onClick={() => setShowReportModal(true)}>📊 Generate Sales Report</button>
+                    </div>
+                    {/* <button
                         onClick={() => setShowReportModal(true)}
                         style={{
                             padding: "10px 20px",
@@ -444,7 +447,7 @@ const SaleAdmin = () => {
                         }}
                     >
                         📊 Generate Sales Report
-                    </button>
+                    </button> */}
                 </div>
 
                 {/* Filter Controls */}
@@ -604,7 +607,7 @@ const SaleAdmin = () => {
                 </div>
 
                 {/* Active Filters */}
-              <div style={{
+                <div style={{
                     padding: '10px',
                     backgroundColor: '#f8f9fa',
                     borderRadius: '6px',
@@ -1033,7 +1036,7 @@ const SaleAdmin = () => {
                                                             }}
                                                         />
                                                     </div>
-                                                    
+
                                                     <div>
                                                         <label style={{
                                                             display: 'block',
@@ -1173,7 +1176,7 @@ const SaleAdmin = () => {
 
                                             <button
                                                 onClick={generateReport}
-                                                disabled={isGeneratingReport || 
+                                                disabled={isGeneratingReport ||
                                                     (reportType === 'date_range' && (!reportDateFrom || !reportDateTo)) ||
                                                     (reportType === 'monthly' && !reportMonth)
                                                 }
@@ -1253,7 +1256,7 @@ const SaleAdmin = () => {
                                                 color: '#6c757d',
                                                 fontSize: '16px'
                                             }}>
-                                                {reportData.reportType === 'monthly' 
+                                                {reportData.reportType === 'monthly'
                                                     ? `Month: ${new Date(reportData.dateRange.from).toLocaleDateString('en-US', { year: 'numeric', month: 'long' })}`
                                                     : `Period: ${new Date(reportData.dateRange.from).toLocaleDateString()} - ${new Date(reportData.dateRange.to).toLocaleDateString()}`
                                                 }
@@ -1529,5 +1532,4 @@ const SaleAdmin = () => {
 }
 
 export default SaleAdmin;
-                                
-                                 
+

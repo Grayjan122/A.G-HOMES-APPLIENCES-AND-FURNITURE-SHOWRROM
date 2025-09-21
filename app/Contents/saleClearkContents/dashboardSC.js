@@ -71,7 +71,7 @@ const DashboardSalesClerk = () => {
                 }
             });
             // console.log(response.data);
-            
+
             setCustomerList(response.data);
         } catch (error) {
             console.error("Error fetching customer list:", error);
@@ -138,12 +138,15 @@ const DashboardSalesClerk = () => {
 
         // Calculate total overdue amount
         const totalOverdue = overdue.reduce((sum, customer) => {
-            return sum + (parseFloat(customer.amount_due) || 0);
+            return sum + (parseFloat(customer.amount_due * 1.05) || 0);
         }, 0);
 
         setCounts(prev => ({
             ...prev,
-            overdueAmount: totalOverdue.toFixed(2)
+            overdueAmount: new Intl.NumberFormat('en-PH', {
+                style: 'currency',
+                currency: 'PHP'
+            }).format(totalOverdue)
         }));
     };
 
@@ -241,9 +244,19 @@ const DashboardSalesClerk = () => {
 
         setCounts(prev => ({
             ...prev,
-            dailyCollection: dailyCollection.toFixed(2),
-            weeklyCollection: weeklyCollection.toFixed(2),
-            monthlyCollection: monthlyCollection.toFixed(2),
+            // dailyCollection: dailyCollection.toFixed(2),
+            dailyCollection: new Intl.NumberFormat('en-PH', {
+                style: 'currency',
+                currency: 'PHP'
+            }).format(dailyCollection),
+            weeklyCollection: new Intl.NumberFormat('en-PH', {
+                style: 'currency',
+                currency: 'PHP'
+            }).format(weeklyCollection),
+            monthlyCollection: new Intl.NumberFormat('en-PH', {
+                style: 'currency',
+                currency: 'PHP'
+            }).format(monthlyCollection),
             totalCustomersWithDue: totalCustomersWithDue.size.toString(),
             dailyDueCustomers: dailyDueCustomers.size.toString(),
             weeklyDueCustomers: weeklyDueCustomers.size.toString(),
@@ -323,27 +336,27 @@ const DashboardSalesClerk = () => {
         // Collection cards
         {
             title: 'Daily Collection',
-            value: `₱${counts.dailyCollection}`,
+            value: `${counts.dailyCollection}`,
             subtitle: `${counts.dailyDueCustomers} customers due today`,
             icon: '💰',
-            color: '#F44336',
+            color: '#46f436ff',
             urgent: true,
             path: '/collections/daily'
         },
         {
             title: 'Weekly Collection',
-            value: `₱${counts.weeklyCollection}`,
+            value: `${counts.weeklyCollection}`,
             subtitle: `${counts.weeklyDueCustomers} customers due this week`,
             icon: '📅',
-            color: '#FF5722',
+            color: '#46f436ff',
             path: '/collections/weekly'
         },
         {
             title: 'Monthly Collection',
-            value: `₱${counts.monthlyCollection}`,
+            value: `${counts.monthlyCollection}`,
             subtitle: `${counts.monthlyDueCustomers} customers due this month`,
             icon: '📊',
-            color: '#795548',
+            color: '#46f436ff',
             path: '/collections/monthly'
         },
         {
@@ -378,6 +391,7 @@ const DashboardSalesClerk = () => {
                         <div
                             key={index}
                             onClick={() => handleCardClick(card.path)}
+                            className="card1"
                             style={{
                                 background: 'white',
                                 borderRadius: '12px',
@@ -387,17 +401,10 @@ const DashboardSalesClerk = () => {
                                 cursor: 'pointer',
                                 transition: 'all 0.3s ease',
                                 position: 'relative',
-                                transform: card.urgent ? 'scale(1.02)' : 'scale(1)',
-                                animation: card.urgent ? 'pulse 2s infinite' : 'none'
+                                // transform: card.urgent ? 'scale(1.02)' : 'scale(1)',
+                                // animation: card.urgent ? 'pulse 2s infinite' : 'none'
                             }}
-                            onMouseEnter={(e) => {
-                                e.target.style.transform = 'translateY(-2px)';
-                                e.target.style.boxShadow = '0 8px 15px rgba(0, 0, 0, 0.15)';
-                            }}
-                            onMouseLeave={(e) => {
-                                e.target.style.transform = card.urgent ? 'scale(1.02)' : 'translateY(0)';
-                                e.target.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)';
-                            }}
+                           
                         >
                             <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
                                 <div style={{
@@ -469,7 +476,7 @@ const DashboardSalesClerk = () => {
                             padding: '16px',
                             background: '#f8f9fa',
                             borderRadius: '8px',
-                            borderLeft: '4px solid #F44336'
+                            borderLeft: '4px solid #62f436ff'
                         }}>
                             <span style={{ fontWeight: '500', color: '#666' }}>
                                 Total Due Today:
@@ -477,10 +484,10 @@ const DashboardSalesClerk = () => {
                             <span style={{
                                 fontSize: '1.3em',
                                 fontWeight: 'bold',
-                                color: '#F44336',
+                                color: '#39f436ff',
                                 animation: 'blink 2s infinite'
                             }}>
-                                ₱{counts.dailyCollection}
+                                {counts.dailyCollection}
                             </span>
                         </div>
                         <div style={{
@@ -498,9 +505,9 @@ const DashboardSalesClerk = () => {
                             <span style={{
                                 fontSize: '1.3em',
                                 fontWeight: 'bold',
-                                color: '#333'
+                                color: '#39f436ff'
                             }}>
-                                ₱{counts.weeklyCollection}
+                                {counts.weeklyCollection}
                             </span>
                         </div>
                         <div style={{
@@ -518,9 +525,9 @@ const DashboardSalesClerk = () => {
                             <span style={{
                                 fontSize: '1.3em',
                                 fontWeight: 'bold',
-                                color: '#333'
+                                color: '#39f436ff'
                             }}>
-                                ₱{counts.monthlyCollection}
+                                {counts.monthlyCollection}
                             </span>
                         </div>
                     </div>
@@ -555,7 +562,7 @@ const DashboardSalesClerk = () => {
                             borderLeft: '4px solid #E91E63'
                         }}>
                             <strong style={{ color: '#E91E63' }}>
-                                Total Overdue Amount: ₱{counts.overdueAmount}
+                                Total Overdue Amount: {counts.overdueAmount}
                             </strong>
                         </div>
 
@@ -579,7 +586,7 @@ const DashboardSalesClerk = () => {
                                             color: '#666',
                                             fontWeight: '600'
                                         }}>
-                                            Customer ID
+                                            Customer Name
                                         </th>
                                         <th style={{
                                             padding: '12px',
@@ -667,7 +674,14 @@ const DashboardSalesClerk = () => {
                                                 fontWeight: 'bold',
                                                 color: '#E91E63'
                                             }}>
-                                                ₱{parseFloat(customer.amount_due).toFixed(2)}
+                                                {
+                                                    new Intl.NumberFormat('en-PH', {
+                                                        style: 'currency',
+                                                        currency: 'PHP'
+                                                    }).format(customer.amount_due * 1.05)
+                                                }
+                                                {/* ₱{parseFloat(customer.amount_due * 1.05).toFixed(2)} */}
+                                                {/* //not orig/ */}
                                             </td>
                                             <td style={{
                                                 padding: '12px',

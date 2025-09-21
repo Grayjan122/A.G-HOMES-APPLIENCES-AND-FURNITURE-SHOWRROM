@@ -7,6 +7,7 @@ import "../../css/inventory-css/inventory.css";
 import 'bootstrap/dist/css/bootstrap.min.css';
 import Button from 'react-bootstrap/Button';
 import Modal from 'react-bootstrap/Modal';
+import { AlertSucces } from '@/app/Components/SweetAlert/success';
 
 const ITEMS_PER_PAGE = 8;
 const MODAL_ITEMS_PER_PAGE = 5;
@@ -32,37 +33,234 @@ const InstallmentSC = () => {
     // Modal pagination states
     const [currentModalPage, setCurrentModalPage] = useState(1);
 
-    // Function to check if payment is overdue by 3+ days and calculate penalty
+    // Record Payment Modal states
+    const [recordPaymentVisible, setRecordPaymentVisible] = useState(false);
+    const [selectedPayments, setSelectedPayments] = useState([]);
+    const [payAllUnpaid, setPayAllUnpaid] = useState(false);
+
+    // Receipt Modal states
+    const [showReceipt, setShowReceipt] = useState(false);
+    const [lastTransaction, setLastTransaction] = useState(null);
+
+    // Penalty Breakdown Modal states
+    const [showPenaltyBreakdown, setShowPenaltyBreakdown] = useState(false);
+    const [selectedPaymentForBreakdown, setSelectedPaymentForBreakdown] = useState(null);
+
+    // Enhanced penalty calculation function
     const calculateOverduePenalty = (payment) => {
         const today = new Date();
         const dueDate = new Date(payment.due_date);
-        const daysDifference = Math.floor((today - dueDate) / (1000 * 60 * 60 * 24));
+        
+        // Calculate the difference in milliseconds and convert to days
+        const timeDifference = today.getTime() - dueDate.getTime();
+        const daysDifference = Math.floor(timeDifference / (1000 * 60 * 60 * 24));
         
         const originalAmount = parseFloat(payment.amount_due || 0);
         
-        // Check if payment is unpaid and overdue by 3+ days
-        if (payment.status !== 'Paid' && daysDifference >= 3) {
-            const penaltyAmount = originalAmount * 0.05; // 5% penalty
-            const totalAmount = originalAmount + penaltyAmount;
-            
-            return {
-                ...payment,
-                original_amount: originalAmount,
-                penalty_amount: penaltyAmount,
-                total_amount: totalAmount,
-                has_penalty: true,
-                days_overdue: daysDifference
-            };
+        // Initialize penalty calculation variables
+        let penaltyAmount = 0;
+        let penaltyDescription = '';
+        let penaltyBreakdown = [];
+        
+        // Check if payment is unpaid and overdue
+        if (payment.status !== 'Paid' && daysDifference > 0) {
+            // Grace period: 1-2 days (no penalty)
+            if (daysDifference >= 1 && daysDifference <= 2) {
+                penaltyDescription = `${daysDifference} day${daysDifference > 1 ? 's' : ''} overdue (Grace Period)`;
+            }
+            // Penalty applies after 3 days: 5% flat penalty regardless of days
+            else if (daysDifference >= 3) {
+                penaltyAmount = originalAmount * 0.05; // 5% flat penalty
+                penaltyDescription = `${daysDifference} days overdue (5% penalty)`;
+                penaltyBreakdown.push({
+                    type: 'Late Payment Penalty',
+                    days: `${daysDifference} days`,
+                    rate: '5%',
+                    amount: penaltyAmount
+                });
+            }
         }
+        
+        const totalAmount = originalAmount + penaltyAmount;
+        const hasPenalty = penaltyAmount > 0;
         
         return {
             ...payment,
             original_amount: originalAmount,
-            penalty_amount: 0,
-            total_amount: originalAmount,
-            has_penalty: false,
-            days_overdue: daysDifference > 0 ? daysDifference : 0
+            penalty_amount: penaltyAmount,
+            total_amount: totalAmount,
+            has_penalty: hasPenalty,
+            days_overdue: Math.max(0, daysDifference),
+            penalty_description: penaltyDescription,
+            penalty_breakdown: penaltyBreakdown,
+            penalty_rate: hasPenalty ? '5%' : '0%',
+            is_in_grace_period: daysDifference >= 1 && daysDifference <= 2,
+            severity_level: daysDifference <= 2 ? 'grace' : 'penalty'
         };
+    };
+
+    // Enhanced display function for penalty information
+    const formatPenaltyDisplay = (payment) => {
+        if (!payment.has_penalty && !payment.is_in_grace_period) {
+            return {
+                mainAmount: payment.original_amount,
+                displayText: 'On Time',
+                className: 'text-success'
+            };
+        }
+        
+        if (payment.is_in_grace_period) {
+            return {
+                mainAmount: payment.original_amount,
+                displayText: payment.penalty_description,
+                className: 'text-warning'
+            };
+        }
+        
+        return {
+            mainAmount: payment.total_amount,
+            penaltyAmount: payment.penalty_amount,
+            originalAmount: payment.original_amount,
+            displayText: payment.penalty_description,
+            className: 'text-danger',
+            breakdown: payment.penalty_breakdown
+        };
+    };
+
+    // Function to calculate total penalties for reporting
+    const calculatePenaltySummary = (payments) => {
+        const summary = {
+            totalPayments: payments.length,
+            onTimePayments: 0,
+            gracePeriodPayments: 0,
+            penalizedPayments: 0,
+            totalPenaltyAmount: 0,
+            totalOriginalAmount: 0,
+            totalAmountWithPenalties: 0,
+            averageDaysOverdue: 0,
+            severityBreakdown: {
+                grace: 0,
+                penalty: 0
+            }
+        };
+        
+        let totalDaysOverdue = 0;
+        
+        payments.forEach(payment => {
+            const processed = calculateOverduePenalty(payment);
+            
+            summary.totalOriginalAmount += processed.original_amount;
+            summary.totalAmountWithPenalties += processed.total_amount;
+            summary.totalPenaltyAmount += processed.penalty_amount;
+            
+            if (processed.days_overdue === 0) {
+                summary.onTimePayments++;
+            } else if (processed.is_in_grace_period) {
+                summary.gracePeriodPayments++;
+            } else if (processed.has_penalty) {
+                summary.penalizedPayments++;
+            }
+            
+            summary.severityBreakdown[processed.severity_level]++;
+            totalDaysOverdue += processed.days_overdue;
+        });
+        
+        summary.averageDaysOverdue = payments.length > 0 ? 
+            (totalDaysOverdue / payments.length).toFixed(1) : 0;
+        
+        summary.penaltyRate = summary.totalOriginalAmount > 0 ? 
+            ((summary.totalPenaltyAmount / summary.totalOriginalAmount) * 100).toFixed(2) + '%' : '0%';
+        
+        return summary;
+    };
+
+    // Updated table display component for amount column
+    const AmountDisplayCell = ({ payment }) => {
+        const processed = calculateOverduePenalty(payment);
+        const display = formatPenaltyDisplay(processed);
+        
+        if (!processed.has_penalty && !processed.is_in_grace_period) {
+            return (
+                <div style={{ textAlign: 'center' }}>
+                    <div className={display.className}>
+                        ₱{display.mainAmount.toLocaleString('en-US', {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2
+                        })}
+                    </div>
+                    <div style={{ fontSize: '10px', color: '#28a745', fontWeight: '500' }}>
+                        {display.displayText}
+                    </div>
+                </div>
+            );
+        }
+        
+        if (processed.is_in_grace_period) {
+            return (
+                <div style={{ textAlign: 'center' }}>
+                    <div>
+                        ₱{display.mainAmount.toLocaleString('en-US', {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2
+                        })}
+                    </div>
+                    <div style={{ fontSize: '10px', color: '#ffc107', fontWeight: '500' }}>
+                        {display.displayText}
+                    </div>
+                </div>
+            );
+        }
+        
+        return (
+            <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '11px', color: '#6c757d', marginBottom: '2px' }}>
+                    Original: ₱{display.originalAmount.toLocaleString('en-US', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2
+                    })}
+                </div>
+                <div style={{ fontSize: '10px', color: '#dc3545', marginBottom: '2px' }}>
+                    + ₱{display.penaltyAmount.toLocaleString('en-US', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2
+                    })} ({processed.penalty_rate})
+                </div>
+                <div style={{ fontSize: '10px', color: '#dc3545', marginBottom: '4px' }}>
+                    ________________________________
+                </div>
+                <div style={{ fontWeight: 'bold', color: '#dc3545', fontSize: '12px' }}>
+                    ₱{display.mainAmount.toLocaleString('en-US', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2
+                    })}
+                </div>
+                {/* <div style={{ fontSize: '9px', color: '#dc3545', fontWeight: '500' }}>
+                    {display.displayText}
+                </div> */}
+                {processed.penalty_breakdown.length > 0 && (
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedPaymentForBreakdown(payment);
+                            setShowPenaltyBreakdown(true);
+                        }}
+                        style={{
+                            fontSize: '8px',
+                            padding: '2px 6px',
+                            marginTop: '2px',
+                            background: 'none',
+                            border: '1px solid #dc3545',
+                            color: '#dc3545',
+                            borderRadius: '4px',
+                            cursor: 'pointer'
+                        }}
+                        title="View penalty breakdown"
+                    >
+                        View Details
+                    </button>
+                )}
+            </div>
+        );
     };
 
     // Reset to first page when filters change
@@ -149,6 +347,29 @@ const InstallmentSC = () => {
     const modalStartIndex = (currentModalPage - 1) * MODAL_ITEMS_PER_PAGE;
     const currentModalItems = processedInstallmentDList.slice(modalStartIndex, modalStartIndex + MODAL_ITEMS_PER_PAGE);
 
+    // Get unpaid payments for record payment modal
+    const unpaidPayments = useMemo(() => {
+        return processedInstallmentDList
+            .filter(payment => payment.status !== 'Paid')
+            .sort((a, b) => parseInt(a.payment_number) - parseInt(b.payment_number));
+    }, [processedInstallmentDList]);
+
+    // Calculate total amount for selected payments
+    const selectedPaymentTotal = useMemo(() => {
+        if (payAllUnpaid) {
+            return unpaidPayments.reduce((sum, payment) => sum + payment.total_amount, 0);
+        }
+        return selectedPayments.reduce((sum, ipsId) => {
+            const payment = unpaidPayments.find(p => p.ips_id === ipsId);
+            return sum + (payment ? payment.total_amount : 0);
+        }, 0);
+    }, [selectedPayments, unpaidPayments, payAllUnpaid]);
+
+    // Calculate penalty summary for current installment
+    const penaltySummary = useMemo(() => {
+        return calculatePenaltySummary(processedInstallmentDList);
+    }, [processedInstallmentDList]);
+
     // Initialize data on mount
     useEffect(() => {
         GetInstallment();
@@ -206,6 +427,92 @@ const InstallmentSC = () => {
         }
     };
 
+    // Show receipt modal
+    const showReceiptModal = (transaction) => {
+        setLastTransaction(transaction);
+        setShowReceipt(true);
+    };
+
+    const closeReceipt = () => {
+        setShowReceipt(false);
+        setLastTransaction(null);
+    };
+
+    const RecordPayment = async () => {
+        try {
+            const baseURL = sessionStorage.getItem('baseURL');
+            const accountID = sessionStorage.getItem('user_id');
+            const locationID = sessionStorage.getItem('location_id');
+            const locName = sessionStorage.getItem('location_name');
+
+            let paymentsToRecord = [];
+
+            if (payAllUnpaid) {
+                paymentsToRecord = unpaidPayments.map(payment => ({
+                    ips_id: payment.ips_id,
+                    amount: payment.total_amount
+                }));
+            } else {
+                paymentsToRecord = selectedPayments.map(ipsId => {
+                    const payment = unpaidPayments.find(p => p.ips_id === ipsId);
+                    return {
+                        ips_id: ipsId,
+                        amount: payment.total_amount
+                    };
+                });
+            }
+            const pdaytails = {
+                installmentID: selectedInstallment.installment_sales_id,
+                recordedBy: accountID,
+                locID: locationID
+            }
+
+            const response = await axios.get(`${baseURL}installment.php`, {
+                params: {
+                    payments: JSON.stringify(paymentsToRecord),
+                    json: JSON.stringify(pdaytails),
+                    operation: "PayInstallment"
+                }
+            });
+
+            if (!isNaN(response.data) && response.data !== null && response.data !== "") {
+                // Create transaction object for receipt
+                const transaction = {
+                    receipt_id: response.data,
+                    customer: selectedInstallment,
+                    payments: payAllUnpaid ? unpaidPayments : selectedPayments.map(ipsId => 
+                        unpaidPayments.find(p => p.ips_id === ipsId)
+                    ),
+                    total_amount: selectedPaymentTotal,
+                    payment_method: 'cash', // Default for installment payments
+                    date: new Date().toLocaleDateString(),
+                    time: new Date().toLocaleTimeString(),
+                    location: locName || 'Agora Showroom Main',
+                    recorded_by: sessionStorage.getItem('user_name') || 'Staff'
+                };
+
+                // Show receipt modal
+                showReceiptModal(transaction);
+
+                // Refresh the installment details
+                GetInstallmentD(selectedInstallment.installment_sales_id);
+                // Refresh the main list to update balance
+                GetInstallment();
+                // Close the record payment modal
+                setRecordPaymentVisible(false);
+                // Reset selections
+                setSelectedPayments([]);
+                setPayAllUnpaid(false);
+
+            } else {
+                alert('Error recording payment: ' + response.data);
+            }
+        } catch (error) {
+            console.error("Error recording payment:", error);
+            alert('Error recording payment. Please try again.');
+        }
+    };
+
     const handlePageChange = (page) => {
         if (page >= 1 && page <= totalPages) {
             setCurrentPage(page);
@@ -228,39 +535,45 @@ const InstallmentSC = () => {
     };
 
     const getSortIcon = (field) => {
-        if (sortField !== field) return <svg
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            style={{ opacity: 0.3, marginLeft: '5px' }}
-        >
-            <path d="m7 14 5-5 5 5" />
-            <path d="m7 10 5 5 5-5" />
-        </svg>;
-        return sortDirection === 'asc' ? <svg
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            style={{ marginLeft: '5px' }}
-        >
-            <path d="m7 14 5-5 5 5" />
-        </svg> : <svg
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            style={{ marginLeft: '5px' }}
-        >
-            <path d="m7 10 5 5 5-5" />
-        </svg>;
+        if (sortField !== field) return (
+            <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                style={{ opacity: 0.3, marginLeft: '5px' }}
+            >
+                <path d="m7 14 5-5 5 5" />
+                <path d="m7 10 5 5 5-5" />
+            </svg>
+        );
+        return sortDirection === 'asc' ? (
+            <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                style={{ marginLeft: '5px' }}
+            >
+                <path d="m7 14 5-5 5 5" />
+            </svg>
+        ) : (
+            <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                style={{ marginLeft: '5px' }}
+            >
+                <path d="m7 10 5 5 5-5" />
+            </svg>
+        );
     };
 
     // Clear all filters function
@@ -280,8 +593,474 @@ const InstallmentSC = () => {
         GetInstallmentD(installment.installment_sales_id);
     };
 
+    // Handle record payment button click
+    const handleRecordPaymentClick = () => {
+        setInstallmentsDVisible(false);
+        setRecordPaymentVisible(true);
+
+        // Auto-select first unpaid payment if only one unpaid payment exists
+        if (unpaidPayments.length === 1) {
+            setSelectedPayments([unpaidPayments[0].ips_id]);
+        } else {
+            setSelectedPayments([]);
+        }
+        setPayAllUnpaid(false);
+    };
+
+    // Handle payment selection with sequential logic
+    const handlePaymentSelection = (ipsId) => {
+        if (payAllUnpaid) {
+            setPayAllUnpaid(false);
+        }
+
+        const payment = unpaidPayments.find(p => p.ips_id === ipsId);
+        const paymentNumber = parseInt(payment.payment_number);
+
+        setSelectedPayments(prev => {
+            if (prev.includes(ipsId)) {
+                // If deselecting, remove this payment and all higher numbered payments
+                const updatedSelections = prev.filter(id => {
+                    const p = unpaidPayments.find(payment => payment.ips_id === id);
+                    return parseInt(p.payment_number) < paymentNumber;
+                });
+                return updatedSelections;
+            } else {
+                // If selecting, add this payment and ensure all lower payments are selected
+                const newSelections = [...prev];
+
+                // Add all payments from payment 1 up to the selected payment number
+                for (let i = 1; i <= paymentNumber; i++) {
+                    const targetPayment = unpaidPayments.find(p => parseInt(p.payment_number) === i);
+                    if (targetPayment && !newSelections.includes(targetPayment.ips_id)) {
+                        newSelections.push(targetPayment.ips_id);
+                    }
+                }
+
+                return newSelections;
+            }
+        });
+    };
+
+    // Check if a payment can be selected (all lower payments must be selected first)
+    const canSelectPayment = (payment) => {
+        if (payAllUnpaid) return false;
+
+        const paymentNumber = parseInt(payment.payment_number);
+
+        // Check if all lower numbered payments are selected
+        for (let i = 1; i < paymentNumber; i++) {
+            const lowerPayment = unpaidPayments.find(p => parseInt(p.payment_number) === i);
+            if (lowerPayment && !selectedPayments.includes(lowerPayment.ips_id)) {
+                return false;
+            }
+        }
+
+        return true;
+    };
+
+    // Get the next required payment number
+    const getNextRequiredPayment = () => {
+        for (let i = 1; i <= unpaidPayments.length; i++) {
+            const payment = unpaidPayments.find(p => parseInt(p.payment_number) === i);
+            if (payment && !selectedPayments.includes(payment.ips_id)) {
+                return i;
+            }
+        }
+        return null;
+    };
+
+    // Handle pay all unpaid toggle
+    const handlePayAllUnpaid = () => {
+        setPayAllUnpaid(!payAllUnpaid);
+        if (!payAllUnpaid) {
+            setSelectedPayments([]);
+        }
+    };
+
     return (
         <>
+            {/* Penalty Breakdown Modal */}
+            <Modal 
+                show={showPenaltyBreakdown} 
+                onHide={() => setShowPenaltyBreakdown(false)} 
+                size="md" 
+                centered
+            >
+                <Modal.Header closeButton>
+                    <Modal.Title>
+                        Penalty Breakdown - Payment #{selectedPaymentForBreakdown?.payment_number}
+                    </Modal.Title>
+                </Modal.Header>
+                <Modal.Body>
+                    {selectedPaymentForBreakdown && (() => {
+                        const processed = calculateOverduePenalty(selectedPaymentForBreakdown);
+                        return (
+                            <>
+                                <div style={{ marginBottom: '15px' }}>
+                                    <h6>Payment Details</h6>
+                                    <div>Due Date: {new Date(selectedPaymentForBreakdown.due_date).toLocaleDateString()}</div>
+                                    <div>Days Overdue: {processed.days_overdue}</div>
+                                    <div>Severity Level: {processed.severity_level.toUpperCase()}</div>
+                                </div>
+                                
+                                <div style={{ marginBottom: '15px' }}>
+                                    <h6>Amount Breakdown</h6>
+                                    <table className="table table-sm">
+                                        <tbody>
+                                            <tr>
+                                                <td>Original Amount</td>
+                                                <td className="text-end">₱{processed.original_amount.toLocaleString('en-US', {
+                                                    minimumFractionDigits: 2,
+                                                    maximumFractionDigits: 2
+                                                })}</td>
+                                            </tr>
+                                            {processed.penalty_breakdown.map((penalty, index) => (
+                                                <tr key={index}>
+                                                    <td>
+                                                        {penalty.type}
+                                                        <br />
+                                                        <small className="text-muted">({penalty.days} - {penalty.rate})</small>
+                                                    </td>
+                                                    <td className="text-end text-danger">
+                                                        +₱{penalty.amount.toLocaleString('en-US', {
+                                                            minimumFractionDigits: 2,
+                                                            maximumFractionDigits: 2
+                                                        })}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                            <tr className="border-top fw-bold">
+                                                <td>Total Amount Due</td>
+                                                <td className="text-end">₱{processed.total_amount.toLocaleString('en-US', {
+                                                    minimumFractionDigits: 2,
+                                                    maximumFractionDigits: 2
+                                                })}</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                
+                                {processed.has_penalty && (
+                                    <div className="alert alert-warning">
+                                        <strong>Total Penalty Rate:</strong> {processed.penalty_rate} of original amount
+                                    </div>
+                                )}
+                            </>
+                        );
+                    })()}
+                </Modal.Body>
+                <Modal.Footer>
+                    <Button variant="secondary" onClick={() => setShowPenaltyBreakdown(false)}>
+                        Close
+                    </Button>
+                </Modal.Footer>
+            </Modal>
+
+            {/* Receipt Modal */}
+            <Modal
+                show={showReceipt}
+                onHide={closeReceipt}
+                size="lg"
+                className="receipt-modal"
+                centered
+                style={{ maxHeight: '90vh' }}
+            >
+                <Modal.Header closeButton style={{ position: 'sticky', top: 0, zIndex: 1050, backgroundColor: 'white', borderBottom: '1px solid #dee2e6' }}>
+                    <Modal.Title className="d-flex align-items-center">
+                        <span className="text-success me-2">✓</span>
+                        Payment Recorded Successfully!
+                    </Modal.Title>
+                </Modal.Header>
+
+                <Modal.Body style={{
+                    maxHeight: '60vh',
+                    overflowY: 'auto',
+                    padding: '1.5rem'
+                }}>
+                    {lastTransaction && (
+                        <>
+                            {/* Transaction Header */}
+                            <div className="text-center mb-4 p-3" style={{ backgroundColor: '#f8fafc', borderRadius: '8px' }}>
+                                <h4 className="fw-semibold mb-2">A.G HOME APPLIANCE AND FURNITURE SHOWROOM</h4>
+                                <div className="text-muted small">
+                                    <div>Payment Receipt #{lastTransaction.receipt_id}</div>
+                                    <div>{lastTransaction.date} • {lastTransaction.time}</div>
+                                    <div>{lastTransaction.location}</div>
+                                </div>
+                            </div>
+
+                            {/* Customer Information */}
+                            <div className="mb-4">
+                                <h5 className="fw-semibold mb-2 text-dark">Customer Information</h5>
+                                <div className="p-3 rounded" style={{ backgroundColor: '#f9fafb' }}>
+                                    <div className="fw-bold">Installment ID: {lastTransaction.customer.installment_sales_id}</div>
+                                    <div className="fw-bold">Customer: {lastTransaction.customer.cust_name}</div>
+                                    <div className="text-muted">Processed by: {`${lastTransaction.customer.fname || ''} ${lastTransaction.customer.mname || ''} ${lastTransaction.customer.lname || ''}`.trim()}</div>
+                                </div>
+                            </div>
+
+                            {/* Payments Recorded */}
+                            <div className="mb-4">
+                                <h5 className="fw-semibold mb-2 text-dark">Payments Recorded</h5>
+                                <div className="p-3 rounded" style={{ backgroundColor: '#f9fafb' }}>
+                                    {lastTransaction.payments.map((payment, index) => (
+                                        <div
+                                            key={index}
+                                            className={`py-3 ${index < lastTransaction.payments.length - 1 ? 'border-bottom' : ''}`}
+                                        >
+                                            <div className="d-flex justify-content-between align-items-start mb-2">
+                                                <div className="flex-grow-1">
+                                                    <div className="fw-bold text-dark">Payment #{payment.payment_number}</div>
+                                                    <div className="text-muted small mb-1">Due Date: {new Date(payment.due_date).toLocaleDateString()}</div>
+                                                    {payment.has_penalty && (
+                                                        <div className="text-muted small mb-1">
+                                                            Original Amount: ₱{payment.original_amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                        </div>
+                                                    )}
+                                                    {payment.has_penalty && (
+                                                        <div className="text-danger small mb-1">
+                                                            Penalty ({payment.penalty_rate}): ₱{payment.penalty_amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                        </div>
+                                                    )}
+                                                    {payment.days_overdue > 0 && (
+                                                        <div className="text-danger small mb-1">
+                                                            {payment.days_overdue} day{payment.days_overdue > 1 ? 's' : ''} overdue
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className="fw-bold text-end">
+                                                    <div style={{ color: payment.has_penalty ? '#dc3545' : '#28a745' }}>
+                                                        ₱{payment.total_amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    </div>
+                                                    {payment.has_penalty && (
+                                                        <div className="text-danger small">With Penalty</div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Payment Summary */}
+                            <div className="mb-4">
+                                <div className="p-3 rounded" style={{ backgroundColor: '#f9fafb' }}>
+                                    <div className="d-flex justify-content-between mb-2">
+                                        <span>Number of Payments:</span>
+                                        <span>{lastTransaction.payments.length}</span>
+                                    </div>
+                                    <div className="d-flex justify-content-between fs-5 fw-bold pt-2 border-top">
+                                        <span>Total Amount Paid:</span>
+                                        <span style={{ color: '#28a745' }}>₱{lastTransaction.total_amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Payment Details */}
+                            <div className="mb-4">
+                                <h5 className="fw-semibold mb-2 text-dark">Payment Details</h5>
+                                <div className="p-3 rounded border" style={{ backgroundColor: '#f0fdf4', borderColor: '#bbf7d0' }}>
+                                    <div className="d-flex justify-content-between mb-2">
+                                        <span className="fw-medium">Payment Method:</span>
+                                        <span className="text-capitalize">{lastTransaction.payment_method}</span>
+                                    </div>
+                                    <div className="d-flex justify-content-between mb-2">
+                                        <span className="fw-medium">Recorded By:</span>
+                                        <span>{lastTransaction.recorded_by}</span>
+                                    </div>
+                                    <div className="d-flex justify-content-between fs-6 fw-semibold" style={{ color: '#10b981' }}>
+                                        <span>Amount Received:</span>
+                                        <span>₱{lastTransaction.total_amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Status Message */}
+                            <div className="alert alert-success text-center mb-4" role="alert">
+                                <p className="mb-2 fw-medium">
+                                    ✓ Payment(s) recorded successfully
+                                </p>
+                                <p className="mb-0 small">
+                                    Customer balance has been updated automatically
+                                </p>
+                            </div>
+                        </>
+                    )}
+                </Modal.Body>
+
+                <Modal.Footer style={{ position: 'sticky', bottom: 0, backgroundColor: 'white', borderTop: '1px solid #dee2e6' }}>
+                    <div className="d-flex gap-2 w-100">
+                        <Button
+                            variant="secondary"
+                            className="flex-fill"
+                            onClick={() => {
+                                // Print functionality
+                                if (lastTransaction) {
+                                    const printContent = document.createElement('div');
+                                    printContent.innerHTML = `
+                                        <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+                                                    width: 148mm; 
+                                                    max-width: 148mm; 
+                                                    margin: 0 auto; 
+                                                    padding: 10mm;
+                                                    font-size: 10px;
+                                                    line-height: 1.3;
+                                                    color: #333;">
+                                          
+                                          <!-- Header -->
+                                          <div style="text-align: center; margin-bottom: 15px; border-bottom: 2px solid #333; padding-bottom: 8px;">
+                                            <h1 style="margin: 0; font-size: 14px; font-weight: bold;">A.G HOME APPLIANCE AND FURNITURE SHOWROOM</h1>
+                                            <div style="font-size: 9px; color: #666; margin-top: 3px;">
+                                              <div>📄 Payment Receipt #${lastTransaction.receipt_id}</div>
+                                              <div>📅 ${lastTransaction.date} • ⏰ ${lastTransaction.time}</div>
+                                              <div>📍 ${lastTransaction.location}</div>
+                                            </div>
+                                          </div>
+                                          
+                                          <!-- Customer Info -->
+                                          <div style="margin-bottom: 12px;">
+                                            <div style="font-weight: bold; margin-bottom: 4px; font-size: 11px;">👤 CUSTOMER INFORMATION</div>
+                                            <div style="background: #f8f9fa; padding: 6px; border-radius: 4px; border-left: 3px solid #007bff;">
+                                              <div style="font-weight: bold; margin-bottom: 2px;">Installment ID: ${lastTransaction.customer.installment_sales_id}</div>
+                                              <div style="font-weight: bold; margin-bottom: 2px;">${lastTransaction.customer.cust_name}</div>
+                                              <div style="color: #666; font-size: 9px;">Processed by: ${`${lastTransaction.customer.fname || ''} ${lastTransaction.customer.mname || ''} ${lastTransaction.customer.lname || ''}`.trim()}</div>
+                                            </div>
+                                          </div>
+                                          
+                                          <!-- Payments -->
+                                          <div style="margin-bottom: 12px;">
+                                            <div style="font-weight: bold; margin-bottom: 4px; font-size: 11px;">💳 PAYMENTS RECORDED</div>
+                                            <div style="background: #f8f9fa; padding: 6px; border-radius: 4px; border-left: 3px solid #28a745;">
+                                              ${lastTransaction.payments.map((payment, index) =>
+                                                `<div style="padding: 6px 0; ${index < lastTransaction.payments.length - 1 ? 'border-bottom: 1px dashed #ccc;' : ''} margin-bottom: ${index < lastTransaction.payments.length - 1 ? '6px' : '0'};">
+                                                  <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                                                    <div style="flex: 1; margin-right: 10px;">
+                                                      <div style="font-weight: bold; font-size: 10px; margin-bottom: 2px;">Payment #${payment.payment_number}</div>
+                                                      <div style="color: #666; font-size: 9px; margin-bottom: 1px;">Due: ${new Date(payment.due_date).toLocaleDateString()}</div>
+                                                      ${payment.has_penalty ? 
+                                                        `<div style="color: #666; font-size: 9px; margin-bottom: 1px;">Original: ₱${payment.original_amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                                                         <div style="color: #dc3545; font-size: 9px; margin-bottom: 1px;">Penalty: ₱${payment.penalty_amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>` : ''
+                                                      }
+                                                      ${payment.days_overdue > 0 ? 
+                                                        `<div style="color: #dc3545; font-size: 9px;">${payment.days_overdue} day${payment.days_overdue > 1 ? 's' : ''} overdue</div>` : ''
+                                                      }
+                                                    </div>
+                                                    <div style="font-weight: bold; text-align: right; font-size: 10px; color: ${payment.has_penalty ? '#dc3545' : '#28a745'};">
+                                                      ₱${payment.total_amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    </div>
+                                                  </div>
+                                                </div>`
+                                              ).join('')}
+                                            </div>
+                                          </div>
+                                          
+                                          <!-- Payment Summary -->
+                                          <div style="margin-bottom: 12px;">
+                                            <div style="background: #f8f9fa; padding: 8px; border-radius: 4px; border: 1px solid #ddd;">
+                                              <div style="display: flex; justify-content: space-between; margin-bottom: 3px;">
+                                                <span>Number of Payments:</span>
+                                                <span>${lastTransaction.payments.length}</span>
+                                              </div>
+                                              <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 12px; 
+                                                          border-top: 2px solid #333; padding-top: 6px; margin-top: 6px;">
+                                                <span>TOTAL AMOUNT PAID:</span>
+                                                <span style="color: #28a745;">₱${lastTransaction.total_amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                              </div>
+                                            </div>
+                                          </div>
+                                          
+                                          <!-- Payment Details -->
+                                          <div style="margin-bottom: 12px;">
+                                            <div style="font-weight: bold; margin-bottom: 4px; font-size: 11px;">💳 PAYMENT DETAILS</div>
+                                            <div style="background: #f0fdf4; padding: 8px; border-radius: 4px; border: 1px solid #bbf7d0;">
+                                              <div style="display: flex; justify-content: space-between; margin-bottom: 3px;">
+                                                <span><strong>Payment Method:</strong></span>
+                                                <span style="text-transform: uppercase;">${lastTransaction.payment_method}</span>
+                                              </div>
+                                              <div style="display: flex; justify-content: space-between; margin-bottom: 3px;">
+                                                <span><strong>Recorded By:</strong></span>
+                                                <span>${lastTransaction.recorded_by}</span>
+                                              </div>
+                                              <div style="display: flex; justify-content: space-between; font-weight: bold; 
+                                                          color: #10b981; font-size: 11px;">
+                                                <span>Amount Received:</span>
+                                                <span>₱${lastTransaction.total_amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                              </div>
+                                            </div>
+                                          </div>
+                                          
+                                          <!-- Footer -->
+                                          <div style="text-align: center; margin-top: 15px; padding-top: 8px; border-top: 2px solid #333;">
+                                            <div style="font-weight: bold; margin-bottom: 6px; font-size: 11px;">✅ PAYMENT RECORDED SUCCESSFULLY</div>
+                                            <div style="font-size: 9px; color: #666; margin-bottom: 3px;">
+                                              Thank you for your payment!
+                                            </div>
+                                            <div style="font-size: 9px; color: #666; margin-bottom: 3px;">
+                                              📋 Please keep this receipt for your records
+                                            </div>
+                                            <div style="font-size: 9px; color: #28a745; font-weight: bold;">
+                                              ✓ Customer balance updated automatically
+                                            </div>
+                                            <div style="margin-top: 8px; font-size: 8px; color: #999;">
+                                              Powered by A.G POS System | Printed on ${new Date().toLocaleString()}
+                                            </div>
+                                          </div>
+                                        </div>
+                                    `;
+
+                                    const printWindow = window.open('', '_blank');
+                                    printWindow.document.write(`
+                                        <!DOCTYPE html>
+                                        <html>
+                                        <head>
+                                          <title>Payment Receipt - #${lastTransaction.receipt_id}</title>
+                                          <style>
+                                            @page {
+                                              size: A4;
+                                              margin: 10mm;
+                                            }
+                                            @media print {
+                                              body { 
+                                                margin: 0; 
+                                                -webkit-print-color-adjust: exact;
+                                                color-adjust: exact;
+                                              }
+                                              * {
+                                                -webkit-print-color-adjust: exact;
+                                                color-adjust: exact;
+                                              }
+                                            }
+                                            body {
+                                              margin: 0;
+                                              padding: 0;
+                                              font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                                            }
+                                          </style>
+                                        </head>
+                                        <body>
+                                          ${printContent.innerHTML}
+                                        </body>
+                                        </html>
+                                    `);
+                                    printWindow.document.close();
+                                    printWindow.print();
+                                }
+                            }}
+                        >
+                            🖨️ Print Receipt
+                        </Button>
+                        <Button
+                            variant="primary"
+                            className="flex-fill"
+                            onClick={closeReceipt}
+                        >
+                            ✓ Close
+                        </Button>
+                    </div>
+                </Modal.Footer>
+            </Modal>
+
+            {/* Installment Details Modal */}
             <Modal show={installmentDVisible} onHide={() => { setInstallmentsDVisible(false); }} size='lg' className='request-modal'>
                 <Modal.Header closeButton className='searched-product-header'>
                     <Modal.Title>Installment Details</Modal.Title>
@@ -302,6 +1081,27 @@ const InstallmentSC = () => {
                             {selectedInstallment.created_at && (
                                 <div><strong>CREATED ON:</strong> {new Date(selectedInstallment.created_at).toLocaleDateString()}</div>
                             )}
+                            
+                            {/* Penalty Summary */}
+                            {penaltySummary.totalPenaltyAmount > 0 && (
+                                <div style={{ 
+                                    marginTop: '15px', 
+                                    padding: '10px', 
+                                    backgroundColor: '#fff3cd', 
+                                    borderRadius: '6px',
+                                    border: '1px solid #ffeaa7'
+                                }}>
+                                    <div style={{ fontWeight: 'bold', marginBottom: '5px' }}>PENALTY SUMMARY:</div>
+                                    <div style={{ fontSize: '14px' }}>
+                                        <div>Total Penalties: ₱{penaltySummary.totalPenaltyAmount.toLocaleString('en-US', {
+                                            minimumFractionDigits: 2,
+                                            maximumFractionDigits: 2
+                                        })}</div>
+                                        <div>Penalized Payments: {penaltySummary.penalizedPayments} of {penaltySummary.totalPayments}</div>
+                                        <div>Average Days Overdue: {penaltySummary.averageDaysOverdue}</div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )}
 
@@ -320,39 +1120,14 @@ const InstallmentSC = () => {
                                     currentModalItems.map((p, i) => (
                                         <tr className='table-row' key={i}>
                                             <td className='td-name'>{p.payment_number}</td>
-                                            <td style={{ textAlign: 'center' }}>
-                                                {p.has_penalty ? (
-                                                    <div>
-                                                        <div style={{ fontSize: '12px', color: '#6c757d', textDecoration: 'line-through' }}>
-                                                            ₱{p.original_amount.toLocaleString('en-US', {
-                                                                minimumFractionDigits: 2,
-                                                                maximumFractionDigits: 2
-                                                            })}
-                                                        </div>
-                                                        <div style={{ fontWeight: 'bold', color: '#dc3545' }}>
-                                                            ₱{p.total_amount.toLocaleString('en-US', {
-                                                                minimumFractionDigits: 2,
-                                                                maximumFractionDigits: 2
-                                                            })}
-                                                        </div>
-                                                        <div style={{ fontSize: '10px', color: '#dc3545' }}>
-                                                            (+5% penalty)
-                                                        </div>
-                                                    </div>
-                                                ) : (
-                                                    <div>
-                                                        ₱{p.original_amount.toLocaleString('en-US', {
-                                                            minimumFractionDigits: 2,
-                                                            maximumFractionDigits: 2
-                                                        })}
-                                                    </div>
-                                                )}
+                                            <td>
+                                                <AmountDisplayCell payment={p} />
                                             </td>
                                             <td style={{ textAlign: 'center' }}>
                                                 <div>{new Date(p.due_date).toLocaleDateString()}</div>
                                                 {p.days_overdue > 0 && p.status !== 'Paid' && (
-                                                    <div style={{ 
-                                                        fontSize: '10px', 
+                                                    <div style={{
+                                                        fontSize: '10px',
                                                         color: p.days_overdue >= 3 ? '#dc3545' : '#ffc107',
                                                         fontWeight: '500'
                                                     }}>
@@ -374,9 +1149,9 @@ const InstallmentSC = () => {
                                                     {p.status}
                                                 </span>
                                                 {p.has_penalty && (
-                                                    <div style={{ 
-                                                        fontSize: '10px', 
-                                                        color: '#dc3545', 
+                                                    <div style={{
+                                                        fontSize: '10px',
+                                                        color: '#dc3545',
                                                         marginTop: '2px',
                                                         fontWeight: '500'
                                                     }}>
@@ -412,6 +1187,197 @@ const InstallmentSC = () => {
                 <Modal.Footer className='searched-product-footer'>
                     <Button variant="secondary" onClick={() => { setInstallmentsDVisible(false); }}>
                         Close
+                    </Button>
+                    {unpaidPayments.length > 0 && (
+                        <Button variant="primary" onClick={handleRecordPaymentClick}>
+                            Record Payment
+                        </Button>
+                    )}
+                </Modal.Footer>
+            </Modal>
+
+            {/* Record Payment Modal */}
+            <Modal show={recordPaymentVisible} onHide={() => { setRecordPaymentVisible(false); }} size='lg' className='request-modal'>
+                <Modal.Header closeButton className='searched-product-header'>
+                    <Modal.Title>Record Payment</Modal.Title>
+                </Modal.Header>
+                <Modal.Body className='request-modal-body'>
+                    {selectedInstallment && (
+                        <div className="r-details-head" style={{ marginBottom: '20px' }}>
+                            <div><strong>INSTALLMENT ID:</strong> {selectedInstallment.installment_sales_id}</div>
+                            <div><strong>CUSTOMER NAME:</strong> {selectedInstallment.cust_name}</div>
+                        </div>
+                    )}
+
+                    <div style={{ marginBottom: '15px', marginLeft: '30px' }}>
+                        <h5>Select Payments to Record:</h5>
+                        <div style={{ marginBottom: '10px' }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <input
+                                    type="checkbox"
+                                    checked={payAllUnpaid}
+                                    onChange={handlePayAllUnpaid}
+                                    disabled={unpaidPayments.length === 0}
+                                />
+                                <span>Pay All Unpaid ({unpaidPayments.length} payments)</span>
+                            </label>
+                        </div>
+
+                        {/* Sequential Payment Info */}
+                        {!payAllUnpaid && unpaidPayments.length > 1 && (
+                            <div style={{
+                                padding: '10px',
+                                backgroundColor: '#e3f2fd',
+                                borderRadius: '6px',
+                                fontSize: '14px',
+                                marginBottom: '10px',
+                                border: '1px solid #bbdefb'
+                            }}>
+                                <div style={{ fontWeight: '500', marginBottom: '5px', color: '#1976d2' }}>
+                                    Payment Order Rule:
+                                </div>
+                                <div style={{ color: '#0d47a1' }}>
+                                    Payments must be recorded in sequence. You must select Payment #{getNextRequiredPayment() || 1} before selecting higher numbered payments.
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className='tableContainer1' style={{ height: '25vh', marginBottom: '15px' }}>
+                        <table className='table'>
+                            <thead>
+                                <tr>
+                                    <th className='t2' style={{ width: '50px' }}>SELECT</th>
+                                    <th className='t2'>PAYMENT #</th>
+                                    <th className='th1'>AMOUNT</th>
+                                    <th className='th1'>DUE DATE</th>
+                                    <th className='th1'>STATUS</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {unpaidPayments.length > 0 ? (
+                                    unpaidPayments.map((payment) => (
+                                        <tr
+                                            key={payment.ips_id}
+                                            className='table-row'
+                                            style={{
+                                                backgroundColor: (payAllUnpaid || selectedPayments.includes(payment.ips_id)) ? '#e3f2fd' :
+                                                    !canSelectPayment(payment) ? '#f5f5f5' : 'transparent',
+                                                opacity: !canSelectPayment(payment) && !payAllUnpaid ? 0.6 : 1
+                                            }}
+                                            onClick={()=>handlePaymentSelection(payment.ips_id)}
+                                        >
+                                            <td style={{ textAlign: 'center' }}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={payAllUnpaid || selectedPayments.includes(payment.ips_id)}
+                                                    onChange={() => handlePaymentSelection(payment.ips_id)}
+                                                    disabled={payAllUnpaid || !canSelectPayment(payment)}
+                                                    title={!canSelectPayment(payment) && !payAllUnpaid ?
+                                                        `You must select Payment #${getNextRequiredPayment()} first` : ''}
+                                                />
+                                            </td>
+                                            <td className='td-name' style={{
+                                                color: !canSelectPayment(payment) && !payAllUnpaid ? '#999' : 'inherit'
+                                            }}>
+                                                {payment.payment_number}
+                                                {!canSelectPayment(payment) && !payAllUnpaid && (
+                                                    <span style={{
+                                                        fontSize: '10px',
+                                                        color: '#dc3545',
+                                                        marginLeft: '5px',
+                                                        fontWeight: '500'
+                                                    }}>
+                                                        (Locked)
+                                                    </span>
+                                                )}
+                                            </td>
+                                            <td>
+                                                <AmountDisplayCell payment={payment} />
+                                            </td>
+                                            <td style={{ textAlign: 'center' }}>
+                                                <div>{new Date(payment.due_date).toLocaleDateString()}</div>
+                                                {payment.days_overdue > 0 && (
+                                                    <div style={{
+                                                        fontSize: '10px',
+                                                        color: payment.days_overdue >= 3 ? '#dc3545' : '#ffc107',
+                                                        fontWeight: '500'
+                                                    }}>
+                                                        {payment.days_overdue} day{payment.days_overdue > 1 ? 's' : ''} overdue
+                                                    </div>
+                                                )}
+                                            </td>
+                                            <td style={{ textAlign: 'center' }}>
+                                                <span style={{
+                                                    padding: '4px 8px',
+                                                    borderRadius: '12px',
+                                                    fontSize: '12px',
+                                                    fontWeight: '500',
+                                                    backgroundColor: '#f8d7da',
+                                                    color: '#721c24'
+                                                }}>
+                                                    {payment.status}
+                                                </span>
+                                                {payment.has_penalty && (
+                                                    <div style={{
+                                                        fontSize: '10px',
+                                                        color: '#dc3545',
+                                                        marginTop: '2px',
+                                                        fontWeight: '500'
+                                                    }}>
+                                                        With Penalty
+                                                    </div>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))
+                                ) : (
+                                    <tr>
+                                        <td colSpan="5" style={{ textAlign: "center", padding: "15px", fontStyle: "italic" }}>
+                                            No unpaid payments found
+                                        </td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {/* Payment Summary */}
+                    <div style={{
+                        padding: '15px',
+                        backgroundColor: '#f8f9fa',
+                        borderRadius: '8px',
+                        border: '1px solid #dee2e6',
+                        marginLeft: '30px'
+                    }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                                <strong>
+                                    {payAllUnpaid
+                                        ? `All Unpaid Payments (${unpaidPayments.length})`
+                                        : `Selected Payments (${selectedPayments.length})`
+                                    }
+                                </strong>
+                            </div>
+                            <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#28a745' }}>
+                                Total: ₱{selectedPaymentTotal.toLocaleString('en-US', {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2
+                                })}
+                            </div>
+                        </div>
+                    </div>
+                </Modal.Body>
+                <Modal.Footer className='searched-product-footer'>
+                    <Button variant="secondary" onClick={() => { setRecordPaymentVisible(false); }}>
+                        Cancel
+                    </Button>
+                    <Button
+                        variant="success"
+                        onClick={RecordPayment}
+                        disabled={!payAllUnpaid && selectedPayments.length === 0}
+                    >
+                        Record Payment{(payAllUnpaid || selectedPayments.length > 1) ? 's' : ''}
                     </Button>
                 </Modal.Footer>
             </Modal>
@@ -520,6 +1486,36 @@ const InstallmentSC = () => {
                                 )}
                             </div>
                         </div>
+
+                        {/* Balance Filter */}
+                        <div>
+                            <label style={{
+                                display: 'block',
+                                marginBottom: '5px',
+                                fontWeight: '500',
+                                fontSize: '14px'
+                            }}>
+                                Filter by Balance
+                            </label>
+                            <select
+                                value={filterBalance}
+                                onChange={(e) => setFilterBalance(e.target.value)}
+                                style={{
+                                    width: '100%',
+                                    padding: '8px 12px',
+                                    border: '1px solid #ced4da',
+                                    borderRadius: '4px',
+                                    fontSize: '14px',
+                                    backgroundColor: 'white'
+                                }}
+                            >
+                                <option value="">All Balances</option>
+                                <option value="zero">Fully Paid (₱0)</option>
+                                <option value="low">Below ₱1,000</option>
+                                <option value="medium">₱1,000 - ₱4,999</option>
+                                <option value="high">₱5,000 and above</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
 
@@ -583,7 +1579,10 @@ const InstallmentSC = () => {
                                 fontSize: '13px',
                                 border: '1px solid #dee2e6'
                             }}>
-                                Balance: {filterBalance}
+                                Balance: {filterBalance === 'zero' ? '₱0 (Fully Paid)' :
+                                         filterBalance === 'low' ? 'Below ₱1,000' :
+                                         filterBalance === 'medium' ? '₱1,000 - ₱4,999' :
+                                         filterBalance === 'high' ? '₱5,000 and above' : filterBalance}
                                 <button
                                     type="button"
                                     onClick={() => setFilterBalance('')}

@@ -536,7 +536,7 @@ const CategoryAdmin = () => {
                 return;
             }
 
-         
+
 
         } catch (error) {
             console.error("Error updating category details:", error);
@@ -992,12 +992,15 @@ const CategoryAdmin = () => {
             </Modal>
 
             <div className='customer-main'>
-                <div className='product-header'>
-                    <div className='head'>
-                        <h1
+               
+
+                <div className='customer-header'>
+                    <div className='h-customer'>
+                         <h1
                             onClick={show_category}
                             style={{ color: categoryVisible ? 'black' : '' }}
                             className='h-product'>CATEGORY MANAGEMENT</h1>
+
                     </div>
                     <div>
                         <button className='add-pro-bttn' hidden={!categoryVisible} onClick={(e) => triggerModal('addCategory', '0', e)}>ADD CATEGORY+</button>
@@ -1201,7 +1204,7 @@ const CategoryAdmin = () => {
 
 
                 {/* Categories Table */}
-                <div className='tableContainer' hidden={!categoryVisible} style={{ height: '35vh', overflowY: 'auto' }}>
+                <div className='tableContainer' hidden={!categoryVisible} style={{ height: '40vh', overflowY: 'auto' }}>
                     {currentCategoryItems && currentCategoryItems.length > 0 ? (
                         <table className='table'>
                             <thead>
@@ -1217,7 +1220,7 @@ const CategoryAdmin = () => {
                                     <tr className='table-row' key={i} onClick={() => triggerModal('viewCategory', p.category_id)}>
                                         <td className='td-name'>{p.category_name}</td>
                                         <td className='td-name'>{p.category_description}</td>
-                                        <td style={{textAlign: 'center'}}>{productList.filter(prod => prod.category_id === p.category_id).length}</td>
+                                        <td style={{ textAlign: 'center' }}>{productList.filter(prod => prod.category_id === p.category_id).length}</td>
                                         <td>
                                             <span className='action' onClick={(e) => {
                                                 e.stopPropagation();

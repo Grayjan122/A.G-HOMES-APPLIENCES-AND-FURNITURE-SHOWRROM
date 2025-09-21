@@ -1289,7 +1289,7 @@ const User = () => {
                 </div>
 
                 {/* Users Table */}
-                <div className='tableContainer' style={{ height: '35vh', overflowY: 'auto' }}>
+                <div className='tableContainer' style={{ height: '40vh', overflowY: 'auto' }}>
                     {currentItems && currentItems.length > 0 ? (
                         <table className='table'>
                             <thead>
