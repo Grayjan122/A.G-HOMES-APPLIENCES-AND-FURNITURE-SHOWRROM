@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import axios from 'axios';
+import InitialsAvatar from '../profile/profile';
 
 
 
@@ -18,14 +19,16 @@ export default function Header() {
   const [user_id, setUser_id] = useState('');
   const [user_fname, setUser_Fname] = useState('');
   const [user_role, setUser_Role] = useState('');
+  const [userFullname, setUserFullname] = useState('');
+
 
 
   useEffect(() => {
     setUser_id(sessionStorage.getItem('user_id'));
     setUser_Fname(sessionStorage.getItem('user_fname'));
     setUser_Role(sessionStorage.getItem('user_role'));
-
-
+    setUserFullname(sessionStorage.getItem('fullname'));
+    
 
   }, []);
 
@@ -124,7 +127,7 @@ export default function Header() {
         <div className="header-content">
           <div className='head-line'>
             <Image src={'/assets/images/logo.png'} width={90} height={90} className='pic-logo' alt='logo' />
-            <h1 className="logo" onClick={ref}>A.G HOME APPLIANCE AND FURNITURE'S SHOWROOM</h1>
+            <h1 className="logo" onClick={ref}>A.G HOME APPLIANCE AND FURNITURE'S SHOWROOM </h1>
           </div>
 
           <div className='bell-andprof' style={{
@@ -148,14 +151,15 @@ export default function Header() {
               cursor: 'pointer',
               position: 'relative'
             }} onClick={toggleDropdown}>
-              <Image
+              {/* <Image
                 src={'/assets/images/noprof.jpg'}
                 width={50}
                 height={50}
                 className='profile-logo'
                 alt='profile'
                 style={{ borderRadius: '50%' }}
-              />
+              /> */}
+              <InitialsAvatar name={userFullname} size={50} />
 
               <div style={{
                 display: 'flex',

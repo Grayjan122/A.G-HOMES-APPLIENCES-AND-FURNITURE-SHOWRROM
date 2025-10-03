@@ -393,7 +393,7 @@ const ReceiveStockIM = () => {
             }
         });
 
-       
+
 
         const accountID = parseInt(sessionStorage.getItem('user_id'));
         const baseURL = sessionStorage.getItem('baseURL');
@@ -459,7 +459,7 @@ const ReceiveStockIM = () => {
                 // setAlertVariant('danger');
                 // setAlert1(true);
                 console.log(response.data);
-                
+
 
                 showAlertError({
                     icon: "error",
@@ -467,7 +467,7 @@ const ReceiveStockIM = () => {
                     text: 'Failed to recieve the delivery!',
                     button: 'Try Again'
                 });
-                
+
                 setViewRequestDetailVisible(true);
                 setContinueR(true);
                 GetRequest();
@@ -570,7 +570,9 @@ const ReceiveStockIM = () => {
                             </thead>
                             <tbody>
                                 {currentItems.map((p, i) => (
-                                    <tr key={i} onClick={() => { handleCheckboxChange1(p.product_id, location_id) }}>
+                                    <tr key={i}
+                                        // onClick={() => { handleCheckboxChange1(p.product_id, location_id) }}
+                                    >
                                         {/* <td>
                                             <input
                                                 type="checkbox"

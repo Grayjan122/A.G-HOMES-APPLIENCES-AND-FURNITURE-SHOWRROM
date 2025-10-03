@@ -8,6 +8,7 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import Button from 'react-bootstrap/Button';
 import Modal from 'react-bootstrap/Modal';
 import { AlertSucces } from '@/app/Components/SweetAlert/success';
+import { showAlertError } from '@/app/Components/SweetAlert/error';
 
 const ITEMS_PER_PAGE = 8;
 const MODAL_ITEMS_PER_PAGE = 5;
@@ -46,31 +47,31 @@ const InstallmentSC = () => {
     const [showPenaltyBreakdown, setShowPenaltyBreakdown] = useState(false);
     const [selectedPaymentForBreakdown, setSelectedPaymentForBreakdown] = useState(null);
 
-    // Enhanced penalty calculation function
+    // Enhanced penalty calculation function with 3-day grace period
     const calculateOverduePenalty = (payment) => {
         const today = new Date();
+        today.setHours(0, 0, 0, 0);
         const dueDate = new Date(payment.due_date);
-        
-        // Calculate the difference in milliseconds and convert to days
+        dueDate.setHours(0, 0, 0, 0);
+
         const timeDifference = today.getTime() - dueDate.getTime();
         const daysDifference = Math.floor(timeDifference / (1000 * 60 * 60 * 24));
-        
+
         const originalAmount = parseFloat(payment.amount_due || 0);
-        
-        // Initialize penalty calculation variables
+
         let penaltyAmount = 0;
         let penaltyDescription = '';
         let penaltyBreakdown = [];
-        
-        // Check if payment is unpaid and overdue
+        let graceDaysLeft = 0;
+        let isInGracePeriod = false;
+
         if (payment.status !== 'Paid' && daysDifference > 0) {
-            // Grace period: 1-2 days (no penalty)
-            if (daysDifference >= 1 && daysDifference <= 2) {
-                penaltyDescription = `${daysDifference} day${daysDifference > 1 ? 's' : ''} overdue (Grace Period)`;
-            }
-            // Penalty applies after 3 days: 5% flat penalty regardless of days
-            else if (daysDifference >= 3) {
-                penaltyAmount = originalAmount * 0.05; // 5% flat penalty
+            if (daysDifference >= 1 && daysDifference <= 3) {
+                graceDaysLeft = 3 - daysDifference;
+                isInGracePeriod = true;
+                penaltyDescription = `${daysDifference} day${daysDifference > 1 ? 's' : ''} overdue (${graceDaysLeft} day${graceDaysLeft !== 1 ? 's' : ''} grace left)`;
+            } else if (daysDifference > 3) {
+                penaltyAmount = originalAmount * 0.05;
                 penaltyDescription = `${daysDifference} days overdue (5% penalty)`;
                 penaltyBreakdown.push({
                     type: 'Late Payment Penalty',
@@ -80,10 +81,10 @@ const InstallmentSC = () => {
                 });
             }
         }
-        
+
         const totalAmount = originalAmount + penaltyAmount;
         const hasPenalty = penaltyAmount > 0;
-        
+
         return {
             ...payment,
             original_amount: originalAmount,
@@ -91,11 +92,12 @@ const InstallmentSC = () => {
             total_amount: totalAmount,
             has_penalty: hasPenalty,
             days_overdue: Math.max(0, daysDifference),
+            grace_days_left: graceDaysLeft,
             penalty_description: penaltyDescription,
             penalty_breakdown: penaltyBreakdown,
             penalty_rate: hasPenalty ? '5%' : '0%',
-            is_in_grace_period: daysDifference >= 1 && daysDifference <= 2,
-            severity_level: daysDifference <= 2 ? 'grace' : 'penalty'
+            is_in_grace_period: isInGracePeriod,
+            severity_level: daysDifference <= 3 ? 'grace' : 'penalty'
         };
     };
 
@@ -108,15 +110,16 @@ const InstallmentSC = () => {
                 className: 'text-success'
             };
         }
-        
+
         if (payment.is_in_grace_period) {
             return {
                 mainAmount: payment.original_amount,
                 displayText: payment.penalty_description,
+                graceDaysLeft: payment.grace_days_left,
                 className: 'text-warning'
             };
         }
-        
+
         return {
             mainAmount: payment.total_amount,
             penaltyAmount: payment.penalty_amount,
@@ -124,6 +127,32 @@ const InstallmentSC = () => {
             displayText: payment.penalty_description,
             className: 'text-danger',
             breakdown: payment.penalty_breakdown
+        };
+    };
+
+    // Calculate customer payment performance metrics
+    const calculateCustomerPerformance = (payments) => {
+        const totalPayments = payments.length;
+        const paidPayments = payments.filter(p => p.status === 'Paid').length;
+        const overduePayments = payments.filter(p => {
+            const processed = calculateOverduePenalty(p);
+            return p.status !== 'Paid' && processed.days_overdue > 3;
+        }).length;
+        
+        const paymentCompletionRate = totalPayments > 0 ? (paidPayments / totalPayments) * 100 : 0;
+        const overdueRate = totalPayments > 0 ? (overduePayments / totalPayments) * 100 : 0;
+        
+        const isBadPayer = overdueRate >= 40;
+        
+        return {
+            totalPayments,
+            paidPayments,
+            overduePayments,
+            paymentCompletionRate: paymentCompletionRate.toFixed(1),
+            overdueRate: overdueRate.toFixed(1),
+            isBadPayer,
+            payerStatus: isBadPayer ? 'Bad Payer' : 'Good Payer',
+            payerStatusColor: isBadPayer ? '#dc3545' : '#28a745'
         };
     };
 
@@ -143,16 +172,16 @@ const InstallmentSC = () => {
                 penalty: 0
             }
         };
-        
+
         let totalDaysOverdue = 0;
-        
+
         payments.forEach(payment => {
             const processed = calculateOverduePenalty(payment);
-            
+
             summary.totalOriginalAmount += processed.original_amount;
             summary.totalAmountWithPenalties += processed.total_amount;
             summary.totalPenaltyAmount += processed.penalty_amount;
-            
+
             if (processed.days_overdue === 0) {
                 summary.onTimePayments++;
             } else if (processed.is_in_grace_period) {
@@ -160,17 +189,17 @@ const InstallmentSC = () => {
             } else if (processed.has_penalty) {
                 summary.penalizedPayments++;
             }
-            
+
             summary.severityBreakdown[processed.severity_level]++;
             totalDaysOverdue += processed.days_overdue;
         });
-        
-        summary.averageDaysOverdue = payments.length > 0 ? 
+
+        summary.averageDaysOverdue = payments.length > 0 ?
             (totalDaysOverdue / payments.length).toFixed(1) : 0;
-        
-        summary.penaltyRate = summary.totalOriginalAmount > 0 ? 
+
+        summary.penaltyRate = summary.totalOriginalAmount > 0 ?
             ((summary.totalPenaltyAmount / summary.totalOriginalAmount) * 100).toFixed(2) + '%' : '0%';
-        
+
         return summary;
     };
 
@@ -178,7 +207,7 @@ const InstallmentSC = () => {
     const AmountDisplayCell = ({ payment }) => {
         const processed = calculateOverduePenalty(payment);
         const display = formatPenaltyDisplay(processed);
-        
+
         if (!processed.has_penalty && !processed.is_in_grace_period) {
             return (
                 <div style={{ textAlign: 'center' }}>
@@ -194,7 +223,7 @@ const InstallmentSC = () => {
                 </div>
             );
         }
-        
+
         if (processed.is_in_grace_period) {
             return (
                 <div style={{ textAlign: 'center' }}>
@@ -207,10 +236,24 @@ const InstallmentSC = () => {
                     <div style={{ fontSize: '10px', color: '#ffc107', fontWeight: '500' }}>
                         {display.displayText}
                     </div>
+                    {display.graceDaysLeft > 0 && (
+                        <div style={{ 
+                            fontSize: '9px', 
+                            color: '#ff9800', 
+                            fontWeight: '600',
+                            marginTop: '2px',
+                            padding: '2px 4px',
+                            backgroundColor: '#fff3e0',
+                            borderRadius: '3px',
+                            display: 'inline-block'
+                        }}>
+                            ⚠ {display.graceDaysLeft} day{display.graceDaysLeft !== 1 ? 's' : ''} until penalty
+                        </div>
+                    )}
                 </div>
             );
         }
-        
+
         return (
             <div style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: '11px', color: '#6c757d', marginBottom: '2px' }}>
@@ -234,9 +277,6 @@ const InstallmentSC = () => {
                         maximumFractionDigits: 2
                     })}
                 </div>
-                {/* <div style={{ fontSize: '9px', color: '#dc3545', fontWeight: '500' }}>
-                    {display.displayText}
-                </div> */}
                 {processed.penalty_breakdown.length > 0 && (
                     <button
                         onClick={(e) => {
@@ -263,16 +303,13 @@ const InstallmentSC = () => {
         );
     };
 
-    // Reset to first page when filters change
     useEffect(() => {
         setCurrentPage(1);
     }, [filterSearch, filterBalance]);
 
-    // Apply filters and sorting to the data
     const filteredAndSortedData = useMemo(() => {
         let filtered = [...installmentList];
 
-        // Filter by search term (customer name or staff name)
         if (filterSearch.trim()) {
             const searchTerm = filterSearch.toLowerCase();
             filtered = filtered.filter(item =>
@@ -281,7 +318,6 @@ const InstallmentSC = () => {
             );
         }
 
-        // Filter by balance range
         if (filterBalance) {
             filtered = filtered.filter(item => {
                 const balance = parseFloat(item.balance) || 0;
@@ -300,13 +336,11 @@ const InstallmentSC = () => {
             });
         }
 
-        // Apply sorting if a field is selected
         if (sortField) {
             filtered.sort((a, b) => {
                 let aVal = a[sortField];
                 let bVal = b[sortField];
 
-                // Handle different data types
                 if (sortField === 'balance') {
                     aVal = parseFloat(aVal) || 0;
                     bVal = parseFloat(bVal) || 0;
@@ -332,29 +366,30 @@ const InstallmentSC = () => {
         return filtered;
     }, [installmentList, filterSearch, filterBalance, sortField, sortDirection]);
 
-    // Pagination calculations using filtered and sorted data
     const totalPages = Math.ceil(filteredAndSortedData.length / ITEMS_PER_PAGE);
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
     const currentItems = filteredAndSortedData.slice(startIndex, startIndex + ITEMS_PER_PAGE);
 
-    // Process installment details with penalty calculations
     const processedInstallmentDList = useMemo(() => {
         return installmentDList.map(payment => calculateOverduePenalty(payment));
     }, [installmentDList]);
 
-    // Modal pagination calculations using processed data
     const totalModalPages = Math.ceil(processedInstallmentDList.length / MODAL_ITEMS_PER_PAGE);
     const modalStartIndex = (currentModalPage - 1) * MODAL_ITEMS_PER_PAGE;
     const currentModalItems = processedInstallmentDList.slice(modalStartIndex, modalStartIndex + MODAL_ITEMS_PER_PAGE);
 
-    // Get unpaid payments for record payment modal
     const unpaidPayments = useMemo(() => {
         return processedInstallmentDList
             .filter(payment => payment.status !== 'Paid')
             .sort((a, b) => parseInt(a.payment_number) - parseInt(b.payment_number));
     }, [processedInstallmentDList]);
 
-    // Calculate total amount for selected payments
+    const overduePayments = useMemo(() => {
+        return unpaidPayments.filter(payment => payment.days_overdue > 3);
+    }, [unpaidPayments]);
+
+    const hasOverduePayments = overduePayments.length > 0;
+
     const selectedPaymentTotal = useMemo(() => {
         if (payAllUnpaid) {
             return unpaidPayments.reduce((sum, payment) => sum + payment.total_amount, 0);
@@ -365,12 +400,14 @@ const InstallmentSC = () => {
         }, 0);
     }, [selectedPayments, unpaidPayments, payAllUnpaid]);
 
-    // Calculate penalty summary for current installment
+    const customerPerformance = useMemo(() => {
+        return calculateCustomerPerformance(processedInstallmentDList);
+    }, [processedInstallmentDList]);
+
     const penaltySummary = useMemo(() => {
         return calculatePenaltySummary(processedInstallmentDList);
     }, [processedInstallmentDList]);
 
-    // Initialize data on mount
     useEffect(() => {
         GetInstallment();
     }, []);
@@ -427,7 +464,6 @@ const InstallmentSC = () => {
         }
     };
 
-    // Show receipt modal
     const showReceiptModal = (transaction) => {
         setLastTransaction(transaction);
         setShowReceipt(true);
@@ -476,40 +512,43 @@ const InstallmentSC = () => {
             });
 
             if (!isNaN(response.data) && response.data !== null && response.data !== "") {
-                // Create transaction object for receipt
                 const transaction = {
                     receipt_id: response.data,
                     customer: selectedInstallment,
-                    payments: payAllUnpaid ? unpaidPayments : selectedPayments.map(ipsId => 
+                    payments: payAllUnpaid ? unpaidPayments : selectedPayments.map(ipsId =>
                         unpaidPayments.find(p => p.ips_id === ipsId)
                     ),
                     total_amount: selectedPaymentTotal,
-                    payment_method: 'cash', // Default for installment payments
+                    payment_method: 'cash',
                     date: new Date().toLocaleDateString(),
                     time: new Date().toLocaleTimeString(),
                     location: locName || 'Agora Showroom Main',
                     recorded_by: sessionStorage.getItem('user_name') || 'Staff'
                 };
 
-                // Show receipt modal
                 showReceiptModal(transaction);
-
-                // Refresh the installment details
                 GetInstallmentD(selectedInstallment.installment_sales_id);
-                // Refresh the main list to update balance
                 GetInstallment();
-                // Close the record payment modal
                 setRecordPaymentVisible(false);
-                // Reset selections
                 setSelectedPayments([]);
                 setPayAllUnpaid(false);
 
             } else {
-                alert('Error recording payment: ' + response.data);
+                showAlertError({
+                    icon: "error",
+                    title: "Something Went Wrong!",
+                    text: 'Record the payment! +' + response.data,
+                    button: 'Try Again'
+                });
             }
         } catch (error) {
             console.error("Error recording payment:", error);
-            alert('Error recording payment. Please try again.');
+            showAlertError({
+                icon: "error",
+                title: "Something Went Wrong!",
+                text: 'Record the payment! +' + error,
+                button: 'Try Again'
+            });
         }
     };
 
@@ -576,7 +615,6 @@ const InstallmentSC = () => {
         );
     };
 
-    // Clear all filters function
     const clearAllFilters = () => {
         setFilterSearch('');
         setFilterBalance('');
@@ -585,20 +623,17 @@ const InstallmentSC = () => {
         setCurrentPage(1);
     };
 
-    // Handle row click to show installment details
     const handleRowClick = (installment) => {
         setSelectedInstallment(installment);
         setInstallmentsDVisible(true);
-        setCurrentModalPage(1); // Reset modal pagination when opening new modal
+        setCurrentModalPage(1);
         GetInstallmentD(installment.installment_sales_id);
     };
 
-    // Handle record payment button click
     const handleRecordPaymentClick = () => {
         setInstallmentsDVisible(false);
         setRecordPaymentVisible(true);
 
-        // Auto-select first unpaid payment if only one unpaid payment exists
         if (unpaidPayments.length === 1) {
             setSelectedPayments([unpaidPayments[0].ips_id]);
         } else {
@@ -607,59 +642,138 @@ const InstallmentSC = () => {
         setPayAllUnpaid(false);
     };
 
-    // Handle payment selection with sequential logic
     const handlePaymentSelection = (ipsId) => {
         if (payAllUnpaid) {
             setPayAllUnpaid(false);
         }
 
-        const payment = unpaidPayments.find(p => p.ips_id === ipsId);
-        const paymentNumber = parseInt(payment.payment_number);
+        if (hasOverduePayments) {
+            const payment = unpaidPayments.find(p => p.ips_id === ipsId);
+            const isOverdue = payment.days_overdue > 3;
 
-        setSelectedPayments(prev => {
-            if (prev.includes(ipsId)) {
-                // If deselecting, remove this payment and all higher numbered payments
-                const updatedSelections = prev.filter(id => {
-                    const p = unpaidPayments.find(payment => payment.ips_id === id);
-                    return parseInt(p.payment_number) < paymentNumber;
-                });
-                return updatedSelections;
-            } else {
-                // If selecting, add this payment and ensure all lower payments are selected
-                const newSelections = [...prev];
-
-                // Add all payments from payment 1 up to the selected payment number
-                for (let i = 1; i <= paymentNumber; i++) {
-                    const targetPayment = unpaidPayments.find(p => parseInt(p.payment_number) === i);
-                    if (targetPayment && !newSelections.includes(targetPayment.ips_id)) {
-                        newSelections.push(targetPayment.ips_id);
+            if (isOverdue) {
+                setSelectedPayments(prev => {
+                    if (prev.includes(ipsId)) {
+                        return prev.filter(id => id !== ipsId);
+                    } else {
+                        return [...prev, ipsId];
                     }
+                });
+            } else {
+                const allOverdueSelected = overduePayments.every(od => 
+                    selectedPayments.includes(od.ips_id)
+                );
+
+                if (!allOverdueSelected) {
+                    return;
                 }
 
-                return newSelections;
+                const paymentNumber = parseInt(payment.payment_number);
+                setSelectedPayments(prev => {
+                    if (prev.includes(ipsId)) {
+                        const updatedSelections = prev.filter(id => {
+                            const p = unpaidPayments.find(payment => payment.ips_id === id);
+                            return parseInt(p.payment_number) < paymentNumber;
+                        });
+                        return updatedSelections;
+                    } else {
+                        const newSelections = [...prev];
+
+                        const highestOverdueNumber = Math.max(
+                            ...overduePayments.map(p => parseInt(p.payment_number))
+                        );
+
+                        for (let i = highestOverdueNumber + 1; i <= paymentNumber; i++) {
+                            const targetPayment = unpaidPayments.find(p => parseInt(p.payment_number) === i);
+                            if (targetPayment && !newSelections.includes(targetPayment.ips_id)) {
+                                newSelections.push(targetPayment.ips_id);
+                            }
+                        }
+
+                        return newSelections;
+                    }
+                });
             }
-        });
+        } else {
+            const payment = unpaidPayments.find(p => p.ips_id === ipsId);
+            const paymentNumber = parseInt(payment.payment_number);
+
+            setSelectedPayments(prev => {
+                if (prev.includes(ipsId)) {
+                    const updatedSelections = prev.filter(id => {
+                        const p = unpaidPayments.find(payment => payment.ips_id === id);
+                        return parseInt(p.payment_number) < paymentNumber;
+                    });
+                    return updatedSelections;
+                } else {
+                    const newSelections = [...prev];
+
+                    for (let i = 1; i <= paymentNumber; i++) {
+                        const targetPayment = unpaidPayments.find(p => parseInt(p.payment_number) === i);
+                        if (targetPayment && !newSelections.includes(targetPayment.ips_id)) {
+                            newSelections.push(targetPayment.ips_id);
+                        }
+                    }
+
+                    return newSelections;
+                }
+            });
+        }
     };
 
-    // Check if a payment can be selected (all lower payments must be selected first)
     const canSelectPayment = (payment) => {
         if (payAllUnpaid) return false;
 
-        const paymentNumber = parseInt(payment.payment_number);
+        const isOverdue = payment.days_overdue > 3;
 
-        // Check if all lower numbered payments are selected
-        for (let i = 1; i < paymentNumber; i++) {
-            const lowerPayment = unpaidPayments.find(p => parseInt(p.payment_number) === i);
-            if (lowerPayment && !selectedPayments.includes(lowerPayment.ips_id)) {
-                return false;
+        if (hasOverduePayments) {
+            if (isOverdue) {
+                return true;
+            } else {
+                const allOverdueSelected = overduePayments.every(od => 
+                    selectedPayments.includes(od.ips_id)
+                );
+                
+                if (!allOverdueSelected) {
+                    return false;
+                }
+
+                const paymentNumber = parseInt(payment.payment_number);
+                const highestOverdueNumber = Math.max(
+                    ...overduePayments.map(p => parseInt(p.payment_number))
+                );
+
+                for (let i = highestOverdueNumber + 1; i < paymentNumber; i++) {
+                    const lowerPayment = unpaidPayments.find(p => parseInt(p.payment_number) === i);
+                    if (lowerPayment && !selectedPayments.includes(lowerPayment.ips_id)) {
+                        return false;
+                    }
+                }
+
+                return true;
+            }
+        } else {
+            const paymentNumber = parseInt(payment.payment_number);
+
+            for (let i = 1; i < paymentNumber; i++) {
+                const lowerPayment = unpaidPayments.find(p => parseInt(p.payment_number) === i);
+                if (lowerPayment && !selectedPayments.includes(lowerPayment.ips_id)) {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+    };
+
+    const getNextRequiredPayment = () => {
+        if (hasOverduePayments) {
+            const unselectedOverdue = overduePayments.find(p => !selectedPayments.includes(p.ips_id));
+            if (unselectedOverdue) {
+                return `${unselectedOverdue.payment_number} (OVERDUE - Must pay all overdue first)`;
             }
         }
 
-        return true;
-    };
-
-    // Get the next required payment number
-    const getNextRequiredPayment = () => {
         for (let i = 1; i <= unpaidPayments.length; i++) {
             const payment = unpaidPayments.find(p => parseInt(p.payment_number) === i);
             if (payment && !selectedPayments.includes(payment.ips_id)) {
@@ -669,7 +783,6 @@ const InstallmentSC = () => {
         return null;
     };
 
-    // Handle pay all unpaid toggle
     const handlePayAllUnpaid = () => {
         setPayAllUnpaid(!payAllUnpaid);
         if (!payAllUnpaid) {
@@ -680,10 +793,10 @@ const InstallmentSC = () => {
     return (
         <>
             {/* Penalty Breakdown Modal */}
-            <Modal 
-                show={showPenaltyBreakdown} 
-                onHide={() => setShowPenaltyBreakdown(false)} 
-                size="md" 
+            <Modal
+                show={showPenaltyBreakdown}
+                onHide={() => setShowPenaltyBreakdown(false)}
+                size="md"
                 centered
             >
                 <Modal.Header closeButton>
@@ -702,7 +815,7 @@ const InstallmentSC = () => {
                                     <div>Days Overdue: {processed.days_overdue}</div>
                                     <div>Severity Level: {processed.severity_level.toUpperCase()}</div>
                                 </div>
-                                
+
                                 <div style={{ marginBottom: '15px' }}>
                                     <h6>Amount Breakdown</h6>
                                     <table className="table table-sm">
@@ -739,7 +852,7 @@ const InstallmentSC = () => {
                                         </tbody>
                                     </table>
                                 </div>
-                                
+
                                 {processed.has_penalty && (
                                     <div className="alert alert-warning">
                                         <strong>Total Penalty Rate:</strong> {processed.penalty_rate} of original amount
@@ -779,7 +892,6 @@ const InstallmentSC = () => {
                 }}>
                     {lastTransaction && (
                         <>
-                            {/* Transaction Header */}
                             <div className="text-center mb-4 p-3" style={{ backgroundColor: '#f8fafc', borderRadius: '8px' }}>
                                 <h4 className="fw-semibold mb-2">A.G HOME APPLIANCE AND FURNITURE SHOWROOM</h4>
                                 <div className="text-muted small">
@@ -789,7 +901,6 @@ const InstallmentSC = () => {
                                 </div>
                             </div>
 
-                            {/* Customer Information */}
                             <div className="mb-4">
                                 <h5 className="fw-semibold mb-2 text-dark">Customer Information</h5>
                                 <div className="p-3 rounded" style={{ backgroundColor: '#f9fafb' }}>
@@ -799,7 +910,6 @@ const InstallmentSC = () => {
                                 </div>
                             </div>
 
-                            {/* Payments Recorded */}
                             <div className="mb-4">
                                 <h5 className="fw-semibold mb-2 text-dark">Payments Recorded</h5>
                                 <div className="p-3 rounded" style={{ backgroundColor: '#f9fafb' }}>
@@ -842,7 +952,6 @@ const InstallmentSC = () => {
                                 </div>
                             </div>
 
-                            {/* Payment Summary */}
                             <div className="mb-4">
                                 <div className="p-3 rounded" style={{ backgroundColor: '#f9fafb' }}>
                                     <div className="d-flex justify-content-between mb-2">
@@ -856,7 +965,6 @@ const InstallmentSC = () => {
                                 </div>
                             </div>
 
-                            {/* Payment Details */}
                             <div className="mb-4">
                                 <h5 className="fw-semibold mb-2 text-dark">Payment Details</h5>
                                 <div className="p-3 rounded border" style={{ backgroundColor: '#f0fdf4', borderColor: '#bbf7d0' }}>
@@ -875,7 +983,6 @@ const InstallmentSC = () => {
                                 </div>
                             </div>
 
-                            {/* Status Message */}
                             <div className="alert alert-success text-center mb-4" role="alert">
                                 <p className="mb-2 fw-medium">
                                     ✓ Payment(s) recorded successfully
@@ -894,7 +1001,6 @@ const InstallmentSC = () => {
                             variant="secondary"
                             className="flex-fill"
                             onClick={() => {
-                                // Print functionality
                                 if (lastTransaction) {
                                     const printContent = document.createElement('div');
                                     printContent.innerHTML = `
@@ -907,19 +1013,17 @@ const InstallmentSC = () => {
                                                     line-height: 1.3;
                                                     color: #333;">
                                           
-                                          <!-- Header -->
                                           <div style="text-align: center; margin-bottom: 15px; border-bottom: 2px solid #333; padding-bottom: 8px;">
                                             <h1 style="margin: 0; font-size: 14px; font-weight: bold;">A.G HOME APPLIANCE AND FURNITURE SHOWROOM</h1>
                                             <div style="font-size: 9px; color: #666; margin-top: 3px;">
-                                              <div>📄 Payment Receipt #${lastTransaction.receipt_id}</div>
-                                              <div>📅 ${lastTransaction.date} • ⏰ ${lastTransaction.time}</div>
-                                              <div>📍 ${lastTransaction.location}</div>
+                                              <div>Payment Receipt #${lastTransaction.receipt_id}</div>
+                                              <div>${lastTransaction.date} • ${lastTransaction.time}</div>
+                                              <div>${lastTransaction.location}</div>
                                             </div>
                                           </div>
                                           
-                                          <!-- Customer Info -->
                                           <div style="margin-bottom: 12px;">
-                                            <div style="font-weight: bold; margin-bottom: 4px; font-size: 11px;">👤 CUSTOMER INFORMATION</div>
+                                            <div style="font-weight: bold; margin-bottom: 4px; font-size: 11px;">CUSTOMER INFORMATION</div>
                                             <div style="background: #f8f9fa; padding: 6px; border-radius: 4px; border-left: 3px solid #007bff;">
                                               <div style="font-weight: bold; margin-bottom: 2px;">Installment ID: ${lastTransaction.customer.installment_sales_id}</div>
                                               <div style="font-weight: bold; margin-bottom: 2px;">${lastTransaction.customer.cust_name}</div>
@@ -927,34 +1031,32 @@ const InstallmentSC = () => {
                                             </div>
                                           </div>
                                           
-                                          <!-- Payments -->
                                           <div style="margin-bottom: 12px;">
-                                            <div style="font-weight: bold; margin-bottom: 4px; font-size: 11px;">💳 PAYMENTS RECORDED</div>
+                                            <div style="font-weight: bold; margin-bottom: 4px; font-size: 11px;">PAYMENTS RECORDED</div>
                                             <div style="background: #f8f9fa; padding: 6px; border-radius: 4px; border-left: 3px solid #28a745;">
                                               ${lastTransaction.payments.map((payment, index) =>
-                                                `<div style="padding: 6px 0; ${index < lastTransaction.payments.length - 1 ? 'border-bottom: 1px dashed #ccc;' : ''} margin-bottom: ${index < lastTransaction.payments.length - 1 ? '6px' : '0'};">
+                                        `<div style="padding: 6px 0; ${index < lastTransaction.payments.length - 1 ? 'border-bottom: 1px dashed #ccc;' : ''} margin-bottom: ${index < lastTransaction.payments.length - 1 ? '6px' : '0'};">
                                                   <div style="display: flex; justify-content: space-between; align-items: flex-start;">
                                                     <div style="flex: 1; margin-right: 10px;">
                                                       <div style="font-weight: bold; font-size: 10px; margin-bottom: 2px;">Payment #${payment.payment_number}</div>
                                                       <div style="color: #666; font-size: 9px; margin-bottom: 1px;">Due: ${new Date(payment.due_date).toLocaleDateString()}</div>
-                                                      ${payment.has_penalty ? 
-                                                        `<div style="color: #666; font-size: 9px; margin-bottom: 1px;">Original: ₱${payment.original_amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                                                      ${payment.has_penalty ?
+                                            `<div style="color: #666; font-size: 9px; margin-bottom: 1px;">Original: ₱${payment.original_amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                                                          <div style="color: #dc3545; font-size: 9px; margin-bottom: 1px;">Penalty: ₱${payment.penalty_amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>` : ''
-                                                      }
-                                                      ${payment.days_overdue > 0 ? 
-                                                        `<div style="color: #dc3545; font-size: 9px;">${payment.days_overdue} day${payment.days_overdue > 1 ? 's' : ''} overdue</div>` : ''
-                                                      }
+                                        }
+                                                      ${payment.days_overdue > 0 ?
+                                            `<div style="color: #dc3545; font-size: 9px;">${payment.days_overdue} day${payment.days_overdue > 1 ? 's' : ''} overdue</div>` : ''
+                                        }
                                                     </div>
                                                     <div style="font-weight: bold; text-align: right; font-size: 10px; color: ${payment.has_penalty ? '#dc3545' : '#28a745'};">
                                                       ₱${payment.total_amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                     </div>
                                                   </div>
                                                 </div>`
-                                              ).join('')}
+                                    ).join('')}
                                             </div>
                                           </div>
                                           
-                                          <!-- Payment Summary -->
                                           <div style="margin-bottom: 12px;">
                                             <div style="background: #f8f9fa; padding: 8px; border-radius: 4px; border: 1px solid #ddd;">
                                               <div style="display: flex; justify-content: space-between; margin-bottom: 3px;">
@@ -969,9 +1071,8 @@ const InstallmentSC = () => {
                                             </div>
                                           </div>
                                           
-                                          <!-- Payment Details -->
                                           <div style="margin-bottom: 12px;">
-                                            <div style="font-weight: bold; margin-bottom: 4px; font-size: 11px;">💳 PAYMENT DETAILS</div>
+                                            <div style="font-weight: bold; margin-bottom: 4px; font-size: 11px;">PAYMENT DETAILS</div>
                                             <div style="background: #f0fdf4; padding: 8px; border-radius: 4px; border: 1px solid #bbf7d0;">
                                               <div style="display: flex; justify-content: space-between; margin-bottom: 3px;">
                                                 <span><strong>Payment Method:</strong></span>
@@ -989,17 +1090,16 @@ const InstallmentSC = () => {
                                             </div>
                                           </div>
                                           
-                                          <!-- Footer -->
                                           <div style="text-align: center; margin-top: 15px; padding-top: 8px; border-top: 2px solid #333;">
-                                            <div style="font-weight: bold; margin-bottom: 6px; font-size: 11px;">✅ PAYMENT RECORDED SUCCESSFULLY</div>
+                                            <div style="font-weight: bold; margin-bottom: 6px; font-size: 11px;">PAYMENT RECORDED SUCCESSFULLY</div>
                                             <div style="font-size: 9px; color: #666; margin-bottom: 3px;">
                                               Thank you for your payment!
                                             </div>
                                             <div style="font-size: 9px; color: #666; margin-bottom: 3px;">
-                                              📋 Please keep this receipt for your records
+                                              Please keep this receipt for your records
                                             </div>
                                             <div style="font-size: 9px; color: #28a745; font-weight: bold;">
-                                              ✓ Customer balance updated automatically
+                                              Customer balance updated automatically
                                             </div>
                                             <div style="margin-top: 8px; font-size: 8px; color: #999;">
                                               Powered by A.G POS System | Printed on ${new Date().toLocaleString()}
@@ -1047,14 +1147,14 @@ const InstallmentSC = () => {
                                 }
                             }}
                         >
-                            🖨️ Print Receipt
+                            Print Receipt
                         </Button>
                         <Button
                             variant="primary"
                             className="flex-fill"
                             onClick={closeReceipt}
                         >
-                            ✓ Close
+                            Close
                         </Button>
                     </div>
                 </Modal.Footer>
@@ -1081,13 +1181,84 @@ const InstallmentSC = () => {
                             {selectedInstallment.created_at && (
                                 <div><strong>CREATED ON:</strong> {new Date(selectedInstallment.created_at).toLocaleDateString()}</div>
                             )}
-                            
+
+                            {/* Customer Performance Metrics */}
+                            <div style={{
+                                marginTop: '15px',
+                                padding: '12px',
+                                backgroundColor: customerPerformance.isBadPayer ? '#ffebee' : '#e8f5e9',
+                                borderRadius: '6px',
+                                border: `2px solid ${customerPerformance.payerStatusColor}`
+                            }}>
+                                <div style={{ 
+                                    fontWeight: 'bold', 
+                                    marginBottom: '8px',
+                                    color: customerPerformance.payerStatusColor,
+                                    fontSize: '16px'
+                                }}>
+                                    CUSTOMER STATUS: {customerPerformance.payerStatus}
+                                </div>
+                                <div style={{ fontSize: '14px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                                    <div>
+                                        <strong>Payment Completion:</strong> {customerPerformance.paymentCompletionRate}%
+                                        <div style={{ 
+                                            height: '8px', 
+                                            backgroundColor: '#e0e0e0', 
+                                            borderRadius: '4px',
+                                            marginTop: '4px',
+                                            overflow: 'hidden'
+                                        }}>
+                                            <div style={{ 
+                                                height: '100%', 
+                                                width: `${customerPerformance.paymentCompletionRate}%`,
+                                                backgroundColor: '#4caf50',
+                                                transition: 'width 0.3s ease'
+                                            }}></div>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <strong>Overdue Rate:</strong> {customerPerformance.overdueRate}%
+                                        <div style={{ 
+                                            height: '8px', 
+                                            backgroundColor: '#e0e0e0', 
+                                            borderRadius: '4px',
+                                            marginTop: '4px',
+                                            overflow: 'hidden'
+                                        }}>
+                                            <div style={{ 
+                                                height: '100%', 
+                                                width: `${customerPerformance.overdueRate}%`,
+                                                backgroundColor: customerPerformance.isBadPayer ? '#f44336' : '#ff9800',
+                                                transition: 'width 0.3s ease'
+                                            }}></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div style={{ marginTop: '8px', fontSize: '13px' }}>
+                                    <div><strong>Paid Payments:</strong> {customerPerformance.paidPayments} / {customerPerformance.totalPayments}</div>
+                                    <div><strong>Overdue Payments:</strong> {customerPerformance.overduePayments}</div>
+                                </div>
+                                {customerPerformance.isBadPayer && (
+                                    <div style={{
+                                        marginTop: '8px',
+                                        padding: '6px',
+                                        backgroundColor: '#fff',
+                                        borderRadius: '4px',
+                                        fontSize: '12px',
+                                        color: '#d32f2f',
+                                        fontWeight: '500'
+                                    }}>
+                                        Warning: Customer has {customerPerformance.overdueRate}% overdue rate (≥40% threshold)
+                                    </div>
+                                )}
+                            </div>
+
                             {/* Penalty Summary */}
                             {penaltySummary.totalPenaltyAmount > 0 && (
-                                <div style={{ 
-                                    marginTop: '15px', 
-                                    padding: '10px', 
-                                    backgroundColor: '#fff3cd', 
+                                <div style={{
+                                    marginTop: '15px',
+                                    padding: '10px',
+                                    backgroundColor: '#fff3cd',
                                     borderRadius: '6px',
                                     border: '1px solid #ffeaa7'
                                 }}>
@@ -1128,7 +1299,7 @@ const InstallmentSC = () => {
                                                 {p.days_overdue > 0 && p.status !== 'Paid' && (
                                                     <div style={{
                                                         fontSize: '10px',
-                                                        color: p.days_overdue >= 3 ? '#dc3545' : '#ffc107',
+                                                        color: p.days_overdue > 3 ? '#dc3545' : '#ffc107',
                                                         fontWeight: '500'
                                                     }}>
                                                         {p.days_overdue} day{p.days_overdue > 1 ? 's' : ''} overdue
@@ -1172,7 +1343,6 @@ const InstallmentSC = () => {
                         </table>
                     </div>
 
-                    {/* Modal Pagination */}
                     {totalModalPages > 1 && (
                         <div style={{ justifyContent: 'center', marginTop: '15px', display: 'flex' }}>
                             <CustomPagination
@@ -1223,8 +1393,35 @@ const InstallmentSC = () => {
                             </label>
                         </div>
 
-                        {/* Sequential Payment Info */}
-                        {!payAllUnpaid && unpaidPayments.length > 1 && (
+                        {hasOverduePayments && !payAllUnpaid && (
+                            <div style={{
+                                padding: '12px',
+                                backgroundColor: '#ffebee',
+                                borderRadius: '6px',
+                                fontSize: '14px',
+                                marginBottom: '10px',
+                                border: '2px solid #f44336'
+                            }}>
+                                <div style={{ fontWeight: 'bold', marginBottom: '8px', color: '#c62828', fontSize: '15px' }}>
+                                    OVERDUE PAYMENTS DETECTED
+                                </div>
+                                <div style={{ color: '#d32f2f', marginBottom: '6px' }}>
+                                    <strong>Required Action:</strong> You must pay ALL {overduePayments.length} overdue payment{overduePayments.length > 1 ? 's' : ''} together before paying any other payments.
+                                </div>
+                                <div style={{ color: '#d32f2f', fontSize: '13px' }}>
+                                    Overdue payments (past 3-day grace period):
+                                    <ul style={{ margin: '4px 0 0 20px', padding: 0 }}>
+                                        {overduePayments.map(p => (
+                                            <li key={p.ips_id}>
+                                                Payment #{p.payment_number} - {p.days_overdue} days overdue
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            </div>
+                        )}
+
+                        {!payAllUnpaid && unpaidPayments.length > 1 && !hasOverduePayments && (
                             <div style={{
                                 padding: '10px',
                                 backgroundColor: '#e3f2fd',
@@ -1256,81 +1453,101 @@ const InstallmentSC = () => {
                             </thead>
                             <tbody>
                                 {unpaidPayments.length > 0 ? (
-                                    unpaidPayments.map((payment) => (
-                                        <tr
-                                            key={payment.ips_id}
-                                            className='table-row'
-                                            style={{
-                                                backgroundColor: (payAllUnpaid || selectedPayments.includes(payment.ips_id)) ? '#e3f2fd' :
-                                                    !canSelectPayment(payment) ? '#f5f5f5' : 'transparent',
-                                                opacity: !canSelectPayment(payment) && !payAllUnpaid ? 0.6 : 1
-                                            }}
-                                            onClick={()=>handlePaymentSelection(payment.ips_id)}
-                                        >
-                                            <td style={{ textAlign: 'center' }}>
-                                                <input
-                                                    type="checkbox"
-                                                    checked={payAllUnpaid || selectedPayments.includes(payment.ips_id)}
-                                                    onChange={() => handlePaymentSelection(payment.ips_id)}
-                                                    disabled={payAllUnpaid || !canSelectPayment(payment)}
-                                                    title={!canSelectPayment(payment) && !payAllUnpaid ?
-                                                        `You must select Payment #${getNextRequiredPayment()} first` : ''}
-                                                />
-                                            </td>
-                                            <td className='td-name' style={{
-                                                color: !canSelectPayment(payment) && !payAllUnpaid ? '#999' : 'inherit'
-                                            }}>
-                                                {payment.payment_number}
-                                                {!canSelectPayment(payment) && !payAllUnpaid && (
-                                                    <span style={{
-                                                        fontSize: '10px',
-                                                        color: '#dc3545',
-                                                        marginLeft: '5px',
-                                                        fontWeight: '500'
-                                                    }}>
-                                                        (Locked)
-                                                    </span>
-                                                )}
-                                            </td>
-                                            <td>
-                                                <AmountDisplayCell payment={payment} />
-                                            </td>
-                                            <td style={{ textAlign: 'center' }}>
-                                                <div>{new Date(payment.due_date).toLocaleDateString()}</div>
-                                                {payment.days_overdue > 0 && (
-                                                    <div style={{
-                                                        fontSize: '10px',
-                                                        color: payment.days_overdue >= 3 ? '#dc3545' : '#ffc107',
-                                                        fontWeight: '500'
-                                                    }}>
-                                                        {payment.days_overdue} day{payment.days_overdue > 1 ? 's' : ''} overdue
-                                                    </div>
-                                                )}
-                                            </td>
-                                            <td style={{ textAlign: 'center' }}>
-                                                <span style={{
-                                                    padding: '4px 8px',
-                                                    borderRadius: '12px',
-                                                    fontSize: '12px',
-                                                    fontWeight: '500',
-                                                    backgroundColor: '#f8d7da',
-                                                    color: '#721c24'
+                                    unpaidPayments.map((payment) => {
+                                        const isOverdue = payment.days_overdue > 3;
+                                        const isDisabled = !canSelectPayment(payment) && !payAllUnpaid;
+                                        
+                                        return (
+                                            <tr
+                                                key={payment.ips_id}
+                                                className='table-row'
+                                                style={{
+                                                    backgroundColor: (payAllUnpaid || selectedPayments.includes(payment.ips_id)) ? '#e3f2fd' :
+                                                        isOverdue ? '#ffebee' :
+                                                        isDisabled ? '#f5f5f5' : 'transparent',
+                                                    opacity: isDisabled ? 0.6 : 1,
+                                                    borderLeft: isOverdue ? '4px solid #f44336' : 'none'
+                                                }}
+                                                onClick={() => !isDisabled && handlePaymentSelection(payment.ips_id)}
+                                            >
+                                                <td style={{ textAlign: 'center' }}>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={payAllUnpaid || selectedPayments.includes(payment.ips_id)}
+                                                        onChange={() => handlePaymentSelection(payment.ips_id)}
+                                                        disabled={payAllUnpaid || isDisabled}
+                                                        title={isDisabled ?
+                                                            (hasOverduePayments ? 'Must pay all overdue payments first' : `You must select Payment #${getNextRequiredPayment()} first`) : ''}
+                                                    />
+                                                </td>
+                                                <td className='td-name' style={{
+                                                    color: isDisabled ? '#999' : 'inherit'
                                                 }}>
-                                                    {payment.status}
-                                                </span>
-                                                {payment.has_penalty && (
-                                                    <div style={{
-                                                        fontSize: '10px',
-                                                        color: '#dc3545',
-                                                        marginTop: '2px',
-                                                        fontWeight: '500'
+                                                    {payment.payment_number}
+                                                    {isOverdue && (
+                                                        <span style={{
+                                                            fontSize: '10px',
+                                                            color: '#fff',
+                                                            backgroundColor: '#f44336',
+                                                            marginLeft: '5px',
+                                                            padding: '2px 6px',
+                                                            borderRadius: '3px',
+                                                            fontWeight: '600'
+                                                        }}>
+                                                            OVERDUE
+                                                        </span>
+                                                    )}
+                                                    {isDisabled && !isOverdue && (
+                                                        <span style={{
+                                                            fontSize: '10px',
+                                                            color: '#dc3545',
+                                                            marginLeft: '5px',
+                                                            fontWeight: '500'
+                                                        }}>
+                                                            (Locked)
+                                                        </span>
+                                                    )}
+                                                </td>
+                                                <td>
+                                                    <AmountDisplayCell payment={payment} />
+                                                </td>
+                                                <td style={{ textAlign: 'center' }}>
+                                                    <div>{new Date(payment.due_date).toLocaleDateString()}</div>
+                                                    {payment.days_overdue > 0 && (
+                                                        <div style={{
+                                                            fontSize: '10px',
+                                                            color: payment.days_overdue > 3 ? '#f44336' : '#ff9800',
+                                                            fontWeight: '600'
+                                                        }}>
+                                                            {payment.days_overdue} day{payment.days_overdue > 1 ? 's' : ''} overdue
+                                                        </div>
+                                                    )}
+                                                </td>
+                                                <td style={{ textAlign: 'center' }}>
+                                                    <span style={{
+                                                        padding: '4px 8px',
+                                                        borderRadius: '12px',
+                                                        fontSize: '12px',
+                                                        fontWeight: '500',
+                                                        backgroundColor: '#f8d7da',
+                                                        color: '#721c24'
                                                     }}>
-                                                        With Penalty
-                                                    </div>
-                                                )}
-                                            </td>
-                                        </tr>
-                                    ))
+                                                        {payment.status}
+                                                    </span>
+                                                    {payment.has_penalty && (
+                                                        <div style={{
+                                                            fontSize: '10px',
+                                                            color: '#dc3545',
+                                                            marginTop: '2px',
+                                                            fontWeight: '500'
+                                                        }}>
+                                                            With Penalty
+                                                        </div>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })
                                 ) : (
                                     <tr>
                                         <td colSpan="5" style={{ textAlign: "center", padding: "15px", fontStyle: "italic" }}>
@@ -1342,7 +1559,6 @@ const InstallmentSC = () => {
                         </table>
                     </div>
 
-                    {/* Payment Summary */}
                     <div style={{
                         padding: '15px',
                         backgroundColor: '#f8f9fa',
@@ -1387,7 +1603,6 @@ const InstallmentSC = () => {
                     <h1 className='h-customer'>INSTALLMENT MANAGEMENT</h1>
                 </div>
 
-                {/* Filter Controls */}
                 <div style={{
                     padding: '15px',
                     backgroundColor: '#ffffff',
@@ -1402,7 +1617,6 @@ const InstallmentSC = () => {
                         gap: '15px',
                         alignItems: 'end'
                     }}>
-                        {/* Search Filter */}
                         <div>
                             <label style={{
                                 display: 'block',
@@ -1487,7 +1701,6 @@ const InstallmentSC = () => {
                             </div>
                         </div>
 
-                        {/* Balance Filter */}
                         <div>
                             <label style={{
                                 display: 'block',
@@ -1519,7 +1732,6 @@ const InstallmentSC = () => {
                     </div>
                 </div>
 
-                {/* Active Filters Display */}
                 <div style={{
                     padding: '10px',
                     backgroundColor: '#f8f9fa',
@@ -1580,9 +1792,9 @@ const InstallmentSC = () => {
                                 border: '1px solid #dee2e6'
                             }}>
                                 Balance: {filterBalance === 'zero' ? '₱0 (Fully Paid)' :
-                                         filterBalance === 'low' ? 'Below ₱1,000' :
-                                         filterBalance === 'medium' ? '₱1,000 - ₱4,999' :
-                                         filterBalance === 'high' ? '₱5,000 and above' : filterBalance}
+                                    filterBalance === 'low' ? 'Below ₱1,000' :
+                                        filterBalance === 'medium' ? '₱1,000 - ₱4,999' :
+                                            filterBalance === 'high' ? '₱5,000 and above' : filterBalance}
                                 <button
                                     type="button"
                                     onClick={() => setFilterBalance('')}
@@ -1628,19 +1840,12 @@ const InstallmentSC = () => {
                                 cursor: "pointer",
                                 fontSize: "14px"
                             }}
-                            onMouseEnter={(e) => {
-                                e.target.style.backgroundColor = '#5a6268';
-                            }}
-                            onMouseLeave={(e) => {
-                                e.target.style.backgroundColor = '#6c757d';
-                            }}
                         >
                             Clear All Filters
                         </button>
                     </div>
                 </div>
 
-                {/* Table */}
                 <div className='tableContainer' style={{ height: '40vh', overflowY: 'auto' }}>
                     <table className='table'>
                         <thead>
@@ -1707,7 +1912,6 @@ const InstallmentSC = () => {
                     </table>
                 </div>
 
-                {/* Pagination */}
                 {totalPages > 1 && (
                     <div style={{ justifySelf: 'center' }}>
                         <CustomPagination

@@ -21,6 +21,11 @@ const SidebarWarehouseRep = () => {
   const [locName, setLocName] = useState('');
 
   useEffect(() => {
+    const user_id = sessionStorage.getItem("user_id");
+
+    if (!user_id){
+      return;
+    }
     setLocName(sessionStorage.getItem('location_name'));
   });
 

@@ -153,6 +153,8 @@ export default function LoginPage() {
 
     sessionStorage.setItem('loginSuccess', 'true');
     sessionStorage.setItem('baseURL', 'http://localhost/capstone-api/api/');
+    // sessionStorage.setItem('baseURL', 'http://192.168.1.12//capstone-api/api/');
+
 
     const correctAnswer = num1 + num2;
     if (parseInt(userAnswer) !== correctAnswer) {
@@ -185,6 +187,7 @@ export default function LoginPage() {
         sessionStorage.setItem('location_id', response.data[0].location_id);
         sessionStorage.setItem('user_fname', response.data[0].fname);
         sessionStorage.setItem('user_role', response.data[0].role_name);
+        sessionStorage.setItem('fullname', response.data[0].fname + ' ' + response.data[0].mname + ' ' + response.data[0].lname);
 
         router.push('/adminPage');
         OnlineState(response.data[0].account_id);
@@ -195,6 +198,8 @@ export default function LoginPage() {
         sessionStorage.setItem('user_fname', response.data[0].fname);
         sessionStorage.setItem('user_role', response.data[0].role_name);
         sessionStorage.setItem('location_name', response.data[0].location_name);
+        sessionStorage.setItem('fullname', response.data[0].fname + ' ' + response.data[0].mname + ' ' + response.data[0].lname);
+
         router.push('/inventoryPage');
         OnlineState(response.data[0].account_id);
 
@@ -204,6 +209,8 @@ export default function LoginPage() {
         sessionStorage.setItem('user_fname', response.data[0].fname);
         sessionStorage.setItem('user_role', response.data[0].role_name);
         sessionStorage.setItem('location_name', response.data[0].location_name);
+        sessionStorage.setItem('fullname', response.data[0].fname + ' ' + response.data[0].mname + ' ' + response.data[0].lname);
+
 
         router.push('/warehousePage');
         OnlineState(response.data[0].account_id);
@@ -214,6 +221,8 @@ export default function LoginPage() {
         sessionStorage.setItem('user_fname', response.data[0].fname);
         sessionStorage.setItem('user_role', response.data[0].role_name);
         sessionStorage.setItem('location_name', response.data[0].location_name);
+        sessionStorage.setItem('fullname', response.data[0].fname + ' ' + response.data[0].mname + ' ' + response.data[0].lname);
+
 
         router.push('/salesClerkPage');
         OnlineState(response.data[0].account_id);

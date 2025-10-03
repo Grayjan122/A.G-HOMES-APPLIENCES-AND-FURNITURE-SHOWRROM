@@ -7,7 +7,8 @@ import Modal from 'react-bootstrap/Modal';
 import Alert from 'react-bootstrap/Alert';
 import CustomPagination from '@/app/Components/Pagination/pagination';
 
-const ITEMS_PER_PAGE = 8;
+const ITEMS_PER_PAGE = 12; // Increased for card layout
+const REPORT_ITEMS_PER_PAGE = 8;
 
 const InventoryIM = () => {
     // Essential state variables
@@ -27,6 +28,7 @@ const InventoryIM = () => {
     const [locID, setLocID] = useState(0);
     const [stockLevel, setStockLevel] = useState('');
     const [searchProd, setSearchProd] = useState('');
+    const [viewMode, setViewMode] = useState('cards'); // 'cards' or 'table'
 
     // Sorting states
     const [sortField, setSortField] = useState('');
@@ -49,7 +51,7 @@ const InventoryIM = () => {
         
         setSortField(field);
         setSortDirection(direction);
-        setCurrentPage(1); // Reset to first page when sorting
+        setCurrentPage(1);
     };
 
     // Apply sorting to inventory list
@@ -59,7 +61,6 @@ const InventoryIM = () => {
                 let aVal = a[sortField];
                 let bVal = b[sortField];
 
-                // Handle different data types
                 if (sortField === 'qty') {
                     aVal = parseInt(aVal) || 0;
                     bVal = parseInt(bVal) || 0;
@@ -85,55 +86,9 @@ const InventoryIM = () => {
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
     const currentItems = sortedInventoryList.slice(startIndex, startIndex + ITEMS_PER_PAGE);
 
-    const totalPages1 = Math.ceil(inventReport.length / ITEMS_PER_PAGE);
-    const startIndex1 = (currentPage1 - 1) * ITEMS_PER_PAGE;
-    const currentItems1 = inventReport.slice(startIndex1, startIndex1 + ITEMS_PER_PAGE);
-
-    // Render sort arrow
-    const renderSortArrow = (field) => {
-        if (sortField !== field) {
-            return (
-                <svg
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    style={{ opacity: 0.3, marginLeft: '5px' }}
-                >
-                    <path d="m7 14 5-5 5 5"/>
-                    <path d="m7 10 5 5 5-5"/>
-                </svg>
-            );
-        }
-
-        return sortDirection === 'asc' ? (
-            <svg
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                style={{ marginLeft: '5px' }}
-            >
-                <path d="m7 14 5-5 5 5"/>
-            </svg>
-        ) : (
-            <svg
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                style={{ marginLeft: '5px' }}
-            >
-                <path d="m7 10 5 5 5-5"/>
-            </svg>
-        );
-    };
+    const totalPages1 = Math.ceil(inventReport.length / REPORT_ITEMS_PER_PAGE);
+    const startIndex1 = (currentPage1 - 1) * REPORT_ITEMS_PER_PAGE;
+    const currentItems1 = inventReport.slice(startIndex1, startIndex1 + REPORT_ITEMS_PER_PAGE);
 
     // Initialize user session
     useEffect(() => {
@@ -144,7 +99,6 @@ const InventoryIM = () => {
     // Load data based on filters
     useEffect(() => {
         GetInventory();
-        // Reset to first page when filters change
         setCurrentPage(1);
     }, [locID, stockLevel, searchProd]);
 
@@ -201,8 +155,6 @@ const InventoryIM = () => {
             });
 
             setInventReport(response.data);
-            console.log(response.data);
-
             Logs(accountID, 'Get the inventory reports of ' + prodName + ' in ' + locName + ' store');
         } catch (error) {
             console.error("Error fetching inventory:", error);
@@ -276,6 +228,198 @@ const InventoryIM = () => {
         }
     };
 
+    // Get stock status color and text
+    const getStockStatus = (qty) => {
+        const quantity = parseInt(qty) || 0;
+        if (quantity === 0) {
+            return { color: '#dc3545', bg: '#f8d7da', text: 'Out of Stock', icon: '❌' };
+        } else {
+            return { color: '#198754', bg: '#d1e7dd', text: 'In Stock', icon: '✅' };
+        }
+    };
+
+    // Render inventory cards
+    const renderInventoryCards = () => (
+        <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))',
+            gap: '20px',
+            padding: '20px 0'
+        }}>
+            {currentItems.length > 0 ? (
+                currentItems.map((item, index) => {
+                    const stockStatus = getStockStatus(item.qty);
+                    return (
+                        <div
+                            key={index}
+                            onClick={() => {
+                                setInventReportVisible(false);
+                                GetInventoryReport(item.product_id, item.location_id, item.product_name, item.description);
+                            }}
+                            style={{
+                                backgroundColor: '#ffffff',
+                                borderRadius: '12px',
+                                padding: '20px',
+                                boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+                                border: '1px solid #e9ecef',
+                                cursor: 'pointer',
+                                transition: 'all 0.3s ease',
+                                position: 'relative',
+                                overflow: 'hidden'
+                            }}
+                            onMouseEnter={(e) => {
+                                e.currentTarget.style.transform = 'translateY(-4px)';
+                                e.currentTarget.style.boxShadow = '0 8px 25px rgba(0, 0, 0, 0.15)';
+                            }}
+                            onMouseLeave={(e) => {
+                                e.currentTarget.style.transform = 'translateY(0)';
+                                e.currentTarget.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)';
+                            }}
+                        >
+                            {/* Stock status indicator */}
+                            <div style={{
+                                position: 'absolute',
+                                top: '15px',
+                                right: '15px',
+                                padding: '6px 12px',
+                                borderRadius: '20px',
+                                backgroundColor: stockStatus.bg,
+                                color: stockStatus.color,
+                                fontSize: '12px',
+                                fontWeight: '600',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                            }}>
+                                <span>{stockStatus.icon}</span>
+                                {stockStatus.text}
+                            </div>
+
+                            {/* Product info */}
+                            <div style={{ marginTop: '10px' }}>
+                                <h3 style={{
+                                    fontSize: '18px',
+                                    fontWeight: '700',
+                                    color: '#2c3e50',
+                                    margin: '0 0 8px 0',
+                                    lineHeight: '1.4'
+                                }}>
+                                    {item.product_name}
+                                </h3>
+
+                                <p style={{
+                                    fontSize: '14px',
+                                    color: '#6c757d',
+                                    margin: '0 0 16px 0',
+                                    lineHeight: '1.5',
+                                    height: '42px',
+                                    overflow: 'hidden',
+                                    display: '-webkit-box',
+                                    WebkitLineClamp: 2,
+                                    WebkitBoxOrient: 'vertical'
+                                }}>
+                                    {item.description}
+                                </p>
+
+                                {/* Stats section */}
+                                <div style={{
+                                    display: 'grid',
+                                    gridTemplateColumns: '1fr 1fr',
+                                    gap: '12px',
+                                    marginTop: '16px'
+                                }}>
+                                    <div style={{
+                                        padding: '12px',
+                                        backgroundColor: '#f8f9fa',
+                                        borderRadius: '8px',
+                                        textAlign: 'center'
+                                    }}>
+                                        <div style={{
+                                            fontSize: '24px',
+                                            fontWeight: '700',
+                                            color: stockStatus.color,
+                                            lineHeight: '1'
+                                        }}>
+                                            {item.qty}
+                                        </div>
+                                        <div style={{
+                                            fontSize: '12px',
+                                            color: '#6c757d',
+                                            marginTop: '4px',
+                                            fontWeight: '500'
+                                        }}>
+                                            STOCK QTY
+                                        </div>
+                                    </div>
+
+                                    <div style={{
+                                        padding: '12px',
+                                        backgroundColor: '#f8f9fa',
+                                        borderRadius: '8px',
+                                        textAlign: 'center'
+                                    }}>
+                                        <div style={{
+                                            fontSize: '14px',
+                                            fontWeight: '600',
+                                            color: '#495057',
+                                            lineHeight: '1.2',
+                                            overflow: 'hidden',
+                                            textOverflow: 'ellipsis',
+                                            whiteSpace: 'nowrap'
+                                        }}>
+                                            {item.location_name}
+                                        </div>
+                                        <div style={{
+                                            fontSize: '12px',
+                                            color: '#6c757d',
+                                            marginTop: '4px',
+                                            fontWeight: '500'
+                                        }}>
+                                            STORE
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Click indicator */}
+                            <div style={{
+                                marginTop: '16px',
+                                padding: '8px',
+                                textAlign: 'center',
+                                fontSize: '12px',
+                                color: '#6c757d',
+                                borderTop: '1px solid #e9ecef',
+                                fontStyle: 'italic'
+                            }}>
+                                Click to view detailed report →
+                            </div>
+                        </div>
+                    );
+                })
+            ) : (
+                <div style={{
+                    gridColumn: '1 / -1',
+                    textAlign: 'center',
+                    padding: '60px 20px',
+                    backgroundColor: '#f8f9fa',
+                    borderRadius: '12px',
+                    color: '#6c757d'
+                }}>
+                    <div style={{ fontSize: '48px', marginBottom: '16px' }}>📦</div>
+                    <h3 style={{ fontSize: '20px', marginBottom: '8px', color: '#495057' }}>
+                        No Inventory Items Found
+                    </h3>
+                    <p>
+                        {sortedInventoryList.length === 0 ? 
+                            "There are no inventory items in the system." : 
+                            "No items match your current filter criteria."
+                        }
+                    </p>
+                </div>
+            )}
+        </div>
+    );
+
     return (
         <>
             <Alert
@@ -287,58 +431,181 @@ const InventoryIM = () => {
                 {message}
             </Alert>
 
+            {/* Enhanced Modal for Inventory Report */}
             <Modal show={!inventReportVisible} onHide={() => { setInventReportVisible(true); }} size='xl' className='request-modal'>
-                <Modal.Header closeButton className='searched-product-header'>
-                    <Modal.Title>Product Inventory Report</Modal.Title>
+                <Modal.Header closeButton style={{ 
+                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    color: 'white',
+                    border: 'none'
+                }}>
+                    <Modal.Title style={{ fontWeight: '600' }}>📊 Product Inventory Report</Modal.Title>
                 </Modal.Header>
-                <Modal.Body>
-                    <div className="r-details-head" style={{width: '95%'}}>
-                        <div className='r-d-div'>
-                            <div className='r-1'><strong>PRODUCT CODE:</strong> {pName}</div>
+                <Modal.Body style={{ padding: '30px', height: '70vh', overflowY: 'auto' }}>
+                    {/* Product Header */}
+                    <div style={{
+                        background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
+                        padding: '24px',
+                        borderRadius: '12px',
+                        marginBottom: '24px',
+                        border: '1px solid #e9ecef'
+                    }}>
+                        <div style={{
+                            display: 'grid',
+                            gridTemplateColumns: '1fr 1fr',
+                            gap: '20px',
+                            alignItems: 'center'
+                        }}>
+                            <div>
+                                <div style={{ 
+                                    fontSize: '14px', 
+                                    fontWeight: '600', 
+                                    color: '#6c757d',
+                                    textTransform: 'uppercase',
+                                    letterSpacing: '0.5px',
+                                    marginBottom: '6px'
+                                }}>
+                                    Product Code
+                                </div>
+                                <div style={{ 
+                                    fontSize: '18px', 
+                                    fontWeight: '700', 
+                                    color: '#2c3e50' 
+                                }}>
+                                    {pName}
+                                </div>
+                            </div>
+                            <div>
+                                <div style={{ 
+                                    fontSize: '14px', 
+                                    fontWeight: '600', 
+                                    color: '#6c757d',
+                                    textTransform: 'uppercase',
+                                    letterSpacing: '0.5px',
+                                    marginBottom: '6px'
+                                }}>
+                                    Description
+                                </div>
+                                <div style={{ 
+                                    fontSize: '16px', 
+                                    color: '#495057' 
+                                }}>
+                                    {pDes}
+                                </div>
+                            </div>
                         </div>
-                        <div><strong>PRODUCT DESCRIPTION:</strong> {pDes}</div>
                     </div>
-                    <div className='tableContainer1' style={{ height: '45vh', overflowY: 'auto' }}>
-                        <table className='table'>
-                            <thead>
-                                <tr>
-                                    <th className='th1'>TYPE</th>
-                                    <th className='th1'>PAST BALANCE</th>
-                                    <th className='th1'>QTY</th>
-                                    <th className='th1'>CURRENT BALANCE</th>
-                                    <th className='th1'>DATE</th>
-                                    <th className='th1'>TIME</th>
-                                    <th className='th1'>DONE BY</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {currentItems1.length > 0 ? (
-                                    currentItems1.map((p, i) => (
-                                        <tr className='table-row' key={i}>
-                                            <td style={{textAlign: 'center'}}>{p.type}</td>
-                                            <td style={{textAlign: 'center'}}>{p.past_balance}</td>
-                                            <td style={{textAlign: 'center'}}>{p.qty}</td>
-                                            <td style={{textAlign: 'center'}}>{p.current_balance}</td>
-                                            <td style={{textAlign: 'center'}}>{p.date}</td>
-                                            <td style={{textAlign: 'center'}}>{p.time}</td>
-                                            <td style={{textAlign: 'center'}}>{`${p.fname} ${p.mname} ${p.lname}`}</td>
-                                        </tr>
-                                    ))
-                                ) : (
-                                    <tr>
-                                        <td colSpan="7" style={{ textAlign: "center", padding: "15px", fontStyle: "italic" }}>
-                                            {inventReport.length === 0 ?
-                                                "No inventory records found" :
-                                                "No records match the current filters"
-                                            }
-                                        </td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
+
+                    {/* Enhanced Report Table */}
+                    <div style={{ 
+                        backgroundColor: '#ffffff',
+                        borderRadius: '12px',
+                        border: '1px solid #e9ecef',
+                        overflow: 'hidden'
+                    }}>
+                        {currentItems1.length > 0 ? (
+                            <div>
+                                {/* Table Header */}
+                                <div style={{
+                                    display: 'grid',
+                                    gridTemplateColumns: '100px 120px 100px 120px 120px 100px 1fr',
+                                    gap: '1px',
+                                    backgroundColor: '#f8f9fa',
+                                    padding: '16px 20px',
+                                    fontWeight: '600',
+                                    fontSize: '13px',
+                                    color: '#495057',
+                                    textTransform: 'uppercase',
+                                    letterSpacing: '0.5px',
+                                    borderBottom: '2px solid #e9ecef'
+                                }}>
+                                    <div>Type</div>
+                                    <div>Past Balance</div>
+                                    <div>Qty</div>
+                                    <div>Current Balance</div>
+                                    <div>Date</div>
+                                    <div>Time</div>
+                                    <div>Done By</div>
+                                </div>
+
+                                {/* Table Body */}
+                                <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                                    {currentItems1.map((item, index) => {
+                                        // Check if transaction type should be negative
+                                        const isNegativeType = ['Installment Sales', 'Sales', 'Transfer Stock'].includes(item.type);
+                                        const displayQty = isNegativeType && parseInt(item.qty) > 0 ? -parseInt(item.qty) : parseInt(item.qty);
+                                        const isPositiveChange = displayQty >= 0;
+                                        return (
+                                            <div
+                                                key={index}
+                                                style={{
+                                                    display: 'grid',
+                                                    gridTemplateColumns: '100px 120px 100px 120px 120px 100px 1fr',
+                                                    gap: '1px',
+                                                    padding: '16px 20px',
+                                                    backgroundColor: index % 2 === 0 ? '#ffffff' : '#f8f9fa',
+                                                    alignItems: 'center',
+                                                    fontSize: '14px',
+                                                    borderBottom: '1px solid #e9ecef',
+                                                    transition: 'background-color 0.2s ease'
+                                                }}
+                                                onMouseEnter={(e) => {
+                                                    e.currentTarget.style.backgroundColor = '#e3f2fd';
+                                                }}
+                                                onMouseLeave={(e) => {
+                                                    e.currentTarget.style.backgroundColor = index % 2 === 0 ? '#ffffff' : '#f8f9fa';
+                                                }}
+                                            >
+                                                <div>
+                                                    <span style={{
+                                                        padding: '4px 8px',
+                                                        borderRadius: '12px',
+                                                        fontSize: '11px',
+                                                        fontWeight: '600',
+                                                        backgroundColor: isNegativeType ? '#f8d7da' : '#d4edda',
+                                                        color: isNegativeType ? '#721c24' : '#155724'
+                                                    }}>
+                                                        {item.type}
+                                                    </span>
+                                                </div>
+                                                <div style={{ fontWeight: '600' }}>{item.past_balance}</div>
+                                                <div style={{
+                                                    fontWeight: '700',
+                                                    color: isPositiveChange ? '#198754' : '#dc3545'
+                                                }}>
+                                                    {displayQty > 0 ? '+' : ''}{displayQty}
+                                                </div>
+                                                <div style={{ fontWeight: '600' }}>{item.current_balance}</div>
+                                                <div style={{ color: '#6c757d' }}>{item.date}</div>
+                                                <div style={{ color: '#6c757d' }}>{item.time}</div>
+                                                <div style={{ color: '#495057' }}>
+                                                    {`${item.fname} ${item.mname} ${item.lname}`.trim()}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        ) : (
+                            <div style={{
+                                textAlign: 'center',
+                                padding: '60px 20px',
+                                color: '#6c757d'
+                            }}>
+                                <div style={{ fontSize: '48px', marginBottom: '16px' }}>📋</div>
+                                <h3 style={{ fontSize: '20px', marginBottom: '8px', color: '#495057' }}>
+                                    No Reports Found
+                                </h3>
+                                <p>No inventory records available for this product.</p>
+                            </div>
+                        )}
                     </div>
+
                     {totalPages1 > 1 && (
-                        <div style={{ justifySelf: 'center' }}>
+                        <div style={{ 
+                            display: 'flex', 
+                            justifyContent: 'center',
+                            marginTop: '24px'
+                        }}>
                             <CustomPagination
                                 currentPage={currentPage1}
                                 totalPages={totalPages1}
@@ -348,53 +615,79 @@ const InventoryIM = () => {
                         </div>
                     )}
                 </Modal.Body>
-                <Modal.Footer className='searched-product-footer'>
-                    <Button variant="secondary" onClick={() => { setInventReportVisible(true); }}>
+                <Modal.Footer style={{ 
+                    backgroundColor: '#f8f9fa',
+                    border: 'none',
+                    padding: '20px 30px'
+                }}>
+                    <Button 
+                        variant="secondary" 
+                        onClick={() => { setInventReportVisible(true); }}
+                        style={{
+                            padding: '10px 24px',
+                            fontWeight: '600',
+                            borderRadius: '8px'
+                        }}
+                    >
                         Close
                     </Button>
                 </Modal.Footer>
             </Modal>
 
             <div className='customer-main'>
-                <div className='customer-header'>
-                    <h1 className='h-customer'>INVENTORY MANAGEMENT</h1>
+                <div className='customer-header' style={{ marginBottom: '30px' }}>
+                    <h1 className='h-customer' style={{ 
+                        // background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                        color: 'black',
+                        // WebkitBackgroundClip: 'text',
+                        // WebkitTextFillColor: 'transparent',
+                        fontSize: '32px',
+                        fontWeight: '700'
+                    }}>
+                        📦 INVENTORY MANAGEMENT
+                    </h1>
                 </div>
 
                 {/* Enhanced Filter Controls */}
                 <div style={{
-                    padding: '15px',
-                    backgroundColor: '#ffffff',
-                    borderRadius: '8px',
-                    margin: '10px 0',
+                    padding: '24px',
+                    background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
+                    borderRadius: '12px',
+                    margin: '20px 0',
                     border: '1px solid #e9ecef',
-                    boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                    boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
                 }}>
                     <div style={{
                         display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                        gap: '15px',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                        gap: '20px',
                         alignItems: 'end'
                     }}>
-                        {/* Store/Location Filter */}
+                        {/* Store Filter */}
                         <div>
                             <label style={{ 
                                 display: 'block', 
-                                marginBottom: '5px', 
-                                fontWeight: '500', 
-                                fontSize: '14px'
+                                marginBottom: '8px', 
+                                fontWeight: '600', 
+                                fontSize: '14px',
+                                color: '#495057'
                             }}>
-                                Filter by Store
+                                🏪 Filter by Store
                             </label>
                             <select
                                 value={locID}
                                 onChange={(e) => setLocID(e.target.value)}
                                 style={{
                                     width: '100%',
-                                    padding: '8px 12px',
-                                    border: '1px solid #ced4da',
-                                    borderRadius: '4px',
-                                    fontSize: '14px'
+                                    padding: '12px 16px',
+                                    border: '2px solid #e9ecef',
+                                    borderRadius: '8px',
+                                    fontSize: '14px',
+                                    backgroundColor: '#ffffff',
+                                    transition: 'border-color 0.3s ease'
                                 }}
+                                onFocus={(e) => e.target.style.borderColor = '#667eea'}
+                                onBlur={(e) => e.target.style.borderColor = '#e9ecef'}
                             >
                                 <option value={0}>All Stores</option>
                                 {locationList.map((r) => (
@@ -409,22 +702,27 @@ const InventoryIM = () => {
                         <div>
                             <label style={{ 
                                 display: 'block', 
-                                marginBottom: '5px', 
-                                fontWeight: '500', 
-                                fontSize: '14px'
+                                marginBottom: '8px', 
+                                fontWeight: '600', 
+                                fontSize: '14px',
+                                color: '#495057'
                             }}>
-                                Filter by Stock Level
+                                📊 Filter by Stock Level
                             </label>
                             <select
                                 value={stockLevel}
                                 onChange={(e) => setStockLevel(e.target.value)}
                                 style={{
                                     width: '100%',
-                                    padding: '8px 12px',
-                                    border: '1px solid #ced4da',
-                                    borderRadius: '4px',
-                                    fontSize: '14px'
+                                    padding: '12px 16px',
+                                    border: '2px solid #e9ecef',
+                                    borderRadius: '8px',
+                                    fontSize: '14px',
+                                    backgroundColor: '#ffffff',
+                                    transition: 'border-color 0.3s ease'
                                 }}
+                                onFocus={(e) => e.target.style.borderColor = '#667eea'}
+                                onBlur={(e) => e.target.style.borderColor = '#e9ecef'}
                             >
                                 <option value={''}>All Stock Levels</option>
                                 <option value={'High'}>In Stock</option>
@@ -436,36 +734,14 @@ const InventoryIM = () => {
                         <div>
                             <label style={{ 
                                 display: 'block', 
-                                marginBottom: '5px', 
-                                fontWeight: '500', 
-                                fontSize: '14px'
+                                marginBottom: '8px', 
+                                fontWeight: '600', 
+                                fontSize: '14px',
+                                color: '#495057'
                             }}>
-                                Search Products
+                                🔍 Search Products
                             </label>
                             <div style={{ position: 'relative' }}>
-                                <div style={{
-                                    position: 'absolute',
-                                    left: '12px',
-                                    top: '50%',
-                                    transform: 'translateY(-50%)',
-                                    zIndex: 1,
-                                    color: '#6c757d'
-                                }}>
-                                    <svg
-                                        width="16"
-                                        height="16"
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth="2"
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                    >
-                                        <circle cx="11" cy="11" r="8" />
-                                        <path d="m21 21-4.35-4.35" />
-                                    </svg>
-                                </div>
-
                                 <input
                                     type="text"
                                     placeholder="Search by product code or description..."
@@ -473,45 +749,46 @@ const InventoryIM = () => {
                                     onChange={(e) => setSearchProd(e.target.value)}
                                     style={{
                                         width: '100%',
-                                        padding: '8px 12px 8px 35px',
-                                        border: '1px solid #ced4da',
-                                        borderRadius: '4px',
-                                        fontSize: '14px'
+                                        padding: '12px 16px 12px 45px',
+                                        border: '2px solid #e9ecef',
+                                        borderRadius: '8px',
+                                        fontSize: '14px',
+                                        backgroundColor: '#ffffff',
+                                        transition: 'border-color 0.3s ease'
                                     }}
+                                    onFocus={(e) => e.target.style.borderColor = '#667eea'}
+                                    onBlur={(e) => e.target.style.borderColor = '#e9ecef'}
                                 />
-
+                                <div style={{
+                                    position: 'absolute',
+                                    left: '15px',
+                                    top: '50%',
+                                    transform: 'translateY(-50%)',
+                                    color: '#6c757d'
+                                }}>
+                                    🔍
+                                </div>
                                 {searchProd && (
                                     <button
                                         type="button"
                                         onClick={() => setSearchProd('')}
                                         style={{
                                             position: 'absolute',
-                                            right: '8px',
+                                            right: '12px',
                                             top: '50%',
                                             transform: 'translateY(-50%)',
-                                            background: 'none',
+                                            background: '#dc3545',
                                             border: 'none',
-                                            color: '#6c757d',
+                                            color: 'white',
                                             cursor: 'pointer',
-                                            padding: '4px',
-                                            borderRadius: '50%',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center'
+                                            padding: '4px 8px',
+                                            borderRadius: '4px',
+                                            fontSize: '12px',
+                                            fontWeight: '600'
                                         }}
                                         title="Clear search"
                                     >
-                                        <svg
-                                            width="14"
-                                            height="14"
-                                            viewBox="0 0 24 24"
-                                            fill="none"
-                                            stroke="currentColor"
-                                            strokeWidth="2"
-                                        >
-                                            <line x1="18" y1="6" x2="6" y2="18"></line>
-                                            <line x1="6" y1="6" x2="18" y2="18"></line>
-                                        </svg>
+                                        ✕
                                     </button>
                                 )}
                             </div>
@@ -519,39 +796,53 @@ const InventoryIM = () => {
                     </div>
                 </div>
 
-                {/* Active Filters Display */}
+                {/* Active Filters & Stats */}
                 <div style={{
-                    padding: '10px',
-                    backgroundColor: '#f8f9fa',
-                    borderRadius: '6px',
+                    padding: '16px 20px',
+                    backgroundColor: '#ffffff',
+                    borderRadius: '8px',
                     margin: '10px 0',
-                    fontSize: '14px',
+                    border: '1px solid #e9ecef',
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
                     display: 'flex',
                     justifyContent: 'space-between',
-                    alignItems: 'center'
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: '16px'
                 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
-                        <strong>Active Filters:</strong>
+                    <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+                        <div style={{ 
+                            fontSize: '16px', 
+                            fontWeight: '600',
+                            color: '#495057',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px'
+                        }}>
+                            🎯 Active Filters:
+                        </div>
 
                         {locID > 0 && (
                             <span style={{
                                 display: 'inline-flex',
                                 alignItems: 'center',
-                                gap: '6px',
-                                padding: '4px 8px',
-                                backgroundColor: '#e9ecef',
-                                borderRadius: '16px',
+                                gap: '8px',
+                                padding: '6px 12px',
+                                backgroundColor: '#e3f2fd',
+                                color: '#1976d2',
+                                borderRadius: '20px',
                                 fontSize: '13px',
-                                border: '1px solid #dee2e6'
+                                fontWeight: '600',
+                                border: '1px solid #bbdefb'
                             }}>
-                                Store: {getLocationName(locID)}
+                                🏪 {getLocationName(locID)}
                                 <button
                                     type="button"
                                     onClick={() => removeFilter('location')}
                                     style={{
                                         background: 'none',
                                         border: 'none',
-                                        color: '#6c757d',
+                                        color: '#1976d2',
                                         cursor: 'pointer',
                                         padding: '2px',
                                         borderRadius: '50%',
@@ -560,29 +851,12 @@ const InventoryIM = () => {
                                         justifyContent: 'center',
                                         width: '18px',
                                         height: '18px',
-                                        marginLeft: '4px'
-                                    }}
-                                    onMouseEnter={(e) => {
-                                        e.target.style.backgroundColor = '#dc3545';
-                                        e.target.style.color = 'white';
-                                    }}
-                                    onMouseLeave={(e) => {
-                                        e.target.style.backgroundColor = 'transparent';
-                                        e.target.style.color = '#6c757d';
+                                        fontSize: '12px',
+                                        fontWeight: 'bold'
                                     }}
                                     title="Remove store filter"
                                 >
-                                    <svg
-                                        width="12"
-                                        height="12"
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth="2"
-                                    >
-                                        <line x1="18" y1="6" x2="6" y2="18"></line>
-                                        <line x1="6" y1="6" x2="18" y2="18"></line>
-                                    </svg>
+                                    ✕
                                 </button>
                             </span>
                         )}
@@ -591,21 +865,23 @@ const InventoryIM = () => {
                             <span style={{
                                 display: 'inline-flex',
                                 alignItems: 'center',
-                                gap: '6px',
-                                padding: '4px 8px',
-                                backgroundColor: '#e9ecef',
-                                borderRadius: '16px',
+                                gap: '8px',
+                                padding: '6px 12px',
+                                backgroundColor: '#f3e5f5',
+                                color: '#7b1fa2',
+                                borderRadius: '20px',
                                 fontSize: '13px',
-                                border: '1px solid #dee2e6'
+                                fontWeight: '600',
+                                border: '1px solid #ce93d8'
                             }}>
-                                Stock: {getStockLevelName(stockLevel)}
+                                📊 {getStockLevelName(stockLevel)}
                                 <button
                                     type="button"
                                     onClick={() => removeFilter('stock')}
                                     style={{
                                         background: 'none',
                                         border: 'none',
-                                        color: '#6c757d',
+                                        color: '#7b1fa2',
                                         cursor: 'pointer',
                                         padding: '2px',
                                         borderRadius: '50%',
@@ -614,29 +890,12 @@ const InventoryIM = () => {
                                         justifyContent: 'center',
                                         width: '18px',
                                         height: '18px',
-                                        marginLeft: '4px'
-                                    }}
-                                    onMouseEnter={(e) => {
-                                        e.target.style.backgroundColor = '#dc3545';
-                                        e.target.style.color = 'white';
-                                    }}
-                                    onMouseLeave={(e) => {
-                                        e.target.style.backgroundColor = 'transparent';
-                                        e.target.style.color = '#6c757d';
+                                        fontSize: '12px',
+                                        fontWeight: 'bold'
                                     }}
                                     title="Remove stock filter"
                                 >
-                                    <svg
-                                        width="12"
-                                        height="12"
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth="2"
-                                    >
-                                        <line x1="18" y1="6" x2="6" y2="18"></line>
-                                        <line x1="6" y1="6" x2="18" y2="18"></line>
-                                    </svg>
+                                    ✕
                                 </button>
                             </span>
                         )}
@@ -645,21 +904,23 @@ const InventoryIM = () => {
                             <span style={{
                                 display: 'inline-flex',
                                 alignItems: 'center',
-                                gap: '6px',
-                                padding: '4px 8px',
-                                backgroundColor: '#e9ecef',
-                                borderRadius: '16px',
+                                gap: '8px',
+                                padding: '6px 12px',
+                                backgroundColor: '#e8f5e8',
+                                color: '#2e7d32',
+                                borderRadius: '20px',
                                 fontSize: '13px',
-                                border: '1px solid #dee2e6'
+                                fontWeight: '600',
+                                border: '1px solid #a5d6a7'
                             }}>
-                                Search: "{searchProd}"
+                                🔍 "{searchProd}"
                                 <button
                                     type="button"
                                     onClick={() => removeFilter('search')}
                                     style={{
                                         background: 'none',
                                         border: 'none',
-                                        color: '#6c757d',
+                                        color: '#2e7d32',
                                         cursor: 'pointer',
                                         padding: '2px',
                                         borderRadius: '50%',
@@ -668,156 +929,196 @@ const InventoryIM = () => {
                                         justifyContent: 'center',
                                         width: '18px',
                                         height: '18px',
-                                        marginLeft: '4px'
-                                    }}
-                                    onMouseEnter={(e) => {
-                                        e.target.style.backgroundColor = '#dc3545';
-                                        e.target.style.color = 'white';
-                                    }}
-                                    onMouseLeave={(e) => {
-                                        e.target.style.backgroundColor = 'transparent';
-                                        e.target.style.color = '#6c757d';
+                                        fontSize: '12px',
+                                        fontWeight: 'bold'
                                     }}
                                     title="Remove search filter"
                                 >
-                                    <svg
-                                        width="12"
-                                        height="12"
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth="2"
-                                    >
-                                        <line x1="18" y1="6" x2="6" y2="18"></line>
-                                        <line x1="6" y1="6" x2="18" y2="18"></line>
-                                    </svg>
+                                    ✕
                                 </button>
                             </span>
                         )}
 
                         {!locID && !stockLevel && !searchProd && (
-                            <span style={{ color: '#6c757d' }}>None</span>
+                            <span style={{ 
+                                color: '#6c757d',
+                                fontStyle: 'italic',
+                                fontSize: '14px'
+                            }}>
+                                None applied
+                            </span>
                         )}
-
-                        <span style={{ marginLeft: '10px', color: '#6c757d' }}>
-                            ({sortedInventoryList.length} records found)
-                        </span>
                     </div>
 
-                    <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                        <div style={{
+                            padding: '8px 16px',
+                            backgroundColor: '#f8f9fa',
+                            borderRadius: '20px',
+                            fontSize: '14px',
+                            fontWeight: '600',
+                            color: '#495057',
+                            border: '1px solid #e9ecef'
+                        }}>
+                            📊 {sortedInventoryList.length} items found
+                        </div>
+
                         <button
                             type="button"
                             onClick={clearAllFilters}
                             style={{
-                                padding: "8px 16px",
-                                backgroundColor: "#6c757d",
-                                color: "white",
-                                border: "none",
-                                borderRadius: "6px",
-                                cursor: "pointer",
-                                fontSize: "14px"
+                                padding: '10px 20px',
+                                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '8px',
+                                cursor: 'pointer',
+                                fontSize: '14px',
+                                fontWeight: '600',
+                                transition: 'transform 0.2s ease'
                             }}
                             onMouseEnter={(e) => {
-                                e.target.style.backgroundColor = '#5a6268';
+                                e.target.style.transform = 'translateY(-2px)';
                             }}
                             onMouseLeave={(e) => {
-                                e.target.style.backgroundColor = '#6c757d';
+                                e.target.style.transform = 'translateY(0)';
                             }}
                         >
-                            Clear All Filters
+                            🗑️ Clear All
                         </button>
                     </div>
                 </div>
 
-                <div className='tableContainer' style={{ height: '45vh', overflowY: 'auto' }}>
-                    <table className='table'>
-                        <thead>
-                            <tr>
-                                <th 
-                                    className='t2' 
-                                    onClick={() => handleSort('product_name')}
-                                    
+                {/* Summary Cards */}
+                {sortedInventoryList.length > 0 && (
+                    <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                        gap: '16px',
+                        margin: '20px 0'
+                    }}>
+                        {(() => {
+                            const inStock = sortedInventoryList.filter(item => parseInt(item.qty) > 0).length;
+                            const outOfStock = sortedInventoryList.filter(item => parseInt(item.qty) === 0).length;
+                            const totalStock = sortedInventoryList.reduce((sum, item) => sum + (parseInt(item.qty) || 0), 0);
+
+                            return [
+                                { title: 'Total Items', value: sortedInventoryList.length, icon: '📦', color: '#17a2b8', bg: '#d1ecf1' },
+                                { title: 'In Stock', value: inStock, icon: '✅', color: '#28a745', bg: '#d4edda' },
+                                { title: 'Out of Stock', value: outOfStock, icon: '❌', color: '#dc3545', bg: '#f8d7da' },
+                                { title: 'Total Quantity', value: totalStock, icon: '📊', color: '#6f42c1', bg: '#e2d9f3' }
+                            ].map((stat, index) => (
+                                <div
+                                    key={index}
+                                    style={{
+                                        padding: '20px',
+                                        backgroundColor: stat.bg,
+                                        borderRadius: '12px',
+                                        textAlign: 'center',
+                                        border: `2px solid ${stat.color}20`
+                                    }}
                                 >
-                                    <span>PRODUCT CODE</span>
-                                    {renderSortArrow('product_name')}
-                                </th>
-                                <th 
-                                    className='t3' 
-                                    onClick={() => handleSort('description')}
-                                   
-                                >
-                                    <span>PRODUCT DESCRIPTION</span>
-                                    {renderSortArrow('description')}
-                                </th>
-                                <th 
-                                    className='th1' 
-                                    onClick={() => handleSort('qty')}
-                                    
-                                >
-                                    <span>STOCK</span>
-                                    {renderSortArrow('qty')}
-                                </th>
-                                <th 
-                                    className='th1' 
-                                    onClick={() => handleSort('location_name')}
-                                   
-                                >
-                                    <span>STORE</span>
-                                    {renderSortArrow('location_name')}
-                                </th>
-                                <th className='t2'>STATUS</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {currentItems.length > 0 ? (
-                                currentItems.map((p, i) => (
-                                    <tr className='table-row' key={i}
-                                        onClick={() => {
-                                            setInventReportVisible(false);
-                                            GetInventoryReport(p.product_id, p.location_id, p.product_name, p.description);
-                                        }}
-                                    >
-                                        <td className='td-name'>{p.product_name}</td>
-                                        <td className='td-name'>{p.description}</td>
-                                        <td style={{ textAlign: 'center' }}>{p.qty}</td>
-                                        <td style={{ textAlign: 'center' }}>{p.location_name}</td>
-                                        <td>
-                                            <div style={{
-                                                display: "flex",
-                                                alignItems: "center",
-                                                gap: "6px",
-                                                fontSize: "12px",
-                                                fontWeight: "bold"
-                                            }}>
-                                                <span style={{
-                                                    height: "20px",
-                                                    width: "20px",
-                                                    borderRadius: "50%",
-                                                    backgroundColor: p.qty > 0 ? "green" : "red"
-                                                }}></span>
-                                                <span>
-                                                    { p.qty > 0 ? "In Stock" : "Out of Stock"}
-                                                </span>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))
-                            ) : (
-                                <tr>
-                                    <td colSpan="5" style={{ textAlign: "center", padding: "15px", fontStyle: "italic" }}>
-                                        {sortedInventoryList.length === 0 ? 
-                                            "No inventory items found" : 
-                                            "No inventory items match the current filters"
-                                        }
-                                    </td>
-                                </tr>
+                                    <div style={{ fontSize: '24px', marginBottom: '8px' }}>{stat.icon}</div>
+                                    <div style={{
+                                        fontSize: '28px',
+                                        fontWeight: '700',
+                                        color: stat.color,
+                                        marginBottom: '4px'
+                                    }}>
+                                        {stat.value}
+                                    </div>
+                                    <div style={{
+                                        fontSize: '12px',
+                                        fontWeight: '600',
+                                        color: '#6c757d',
+                                        textTransform: 'uppercase',
+                                        letterSpacing: '0.5px'
+                                    }}>
+                                        {stat.title}
+                                    </div>
+                                </div>
+                            ));
+                        })()}
+                    </div>
+                )}
+
+                {/* Sort Controls */}
+                <div style={{
+                    padding: '16px 20px',
+                    backgroundColor: '#ffffff',
+                    borderRadius: '8px',
+                    margin: '10px 0',
+                    border: '1px solid #e9ecef',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '16px',
+                    flexWrap: 'wrap'
+                }}>
+                    <div style={{ 
+                        fontSize: '16px', 
+                        fontWeight: '600',
+                        color: '#495057',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px'
+                    }}>
+                        🔄 Sort by:
+                    </div>
+
+                    {[
+                        { field: 'product_name', label: 'Product Code' },
+                        { field: 'description', label: 'Description' },
+                        { field: 'qty', label: 'Stock Quantity' },
+                        { field: 'location_name', label: 'Store Name' }
+                    ].map((sort) => (
+                        <button
+                            key={sort.field}
+                            onClick={() => handleSort(sort.field)}
+                            style={{
+                                padding: '8px 16px',
+                                backgroundColor: sortField === sort.field ? '#667eea' : '#f8f9fa',
+                                color: sortField === sort.field ? 'white' : '#495057',
+                                border: '1px solid #e9ecef',
+                                borderRadius: '20px',
+                                cursor: 'pointer',
+                                fontSize: '14px',
+                                fontWeight: '500',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                transition: 'all 0.3s ease'
+                            }}
+                            onMouseEnter={(e) => {
+                                if (sortField !== sort.field) {
+                                    e.target.style.backgroundColor = '#e9ecef';
+                                }
+                            }}
+                            onMouseLeave={(e) => {
+                                if (sortField !== sort.field) {
+                                    e.target.style.backgroundColor = '#f8f9fa';
+                                }
+                            }}
+                        >
+                            {sort.label}
+                            {sortField === sort.field && (
+                                <span style={{ fontSize: '12px' }}>
+                                    {sortDirection === 'asc' ? '↑' : '↓'}
+                                </span>
                             )}
-                        </tbody>
-                    </table>
+                        </button>
+                    ))}
                 </div>
 
+                {/* Inventory Display */}
+                {renderInventoryCards()}
+
+                {/* Pagination */}
                 {totalPages > 1 && (
-                    <div style={{ justifySelf: 'center' }}>
+                    <div style={{ 
+                        display: 'flex', 
+                        justifyContent: 'center',
+                        marginTop: '30px'
+                    }}>
                         <CustomPagination
                             currentPage={currentPage}
                             totalPages={totalPages}

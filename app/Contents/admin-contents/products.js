@@ -13,7 +13,7 @@ import CustomPagination from '@/app/Components/Pagination/pagination';
 import { AlertSucces } from '@/app/Components/SweetAlert/success';
 import { showAlertError } from '@/app/Components/SweetAlert/error';
 
-const ITEMS_PER_PAGE = 8;
+const ITEMS_PER_PAGE = 9;
 
 const ProductsAdmin = () => {
     const [show, setShow] = useState(false);
@@ -334,7 +334,7 @@ const ProductsAdmin = () => {
         }
 
         // Upload image first if one is selected
-        let imagePath = 'Nothing as for now';
+        let imagePath = '/uploads/products/defualt.jpg';
         if (selectedFile) {
             imagePath = await uploadImage();
             if (!imagePath) {
@@ -430,7 +430,7 @@ const ProductsAdmin = () => {
             setCat(product.category_name);
             setProdId(product.product_id);
             setDateCreated(product.date_created);
-            
+
             // FIXED: Set the product image path
             setProductImagePath(product.product_preview_image || 'Nothing as for now');
 
@@ -651,7 +651,8 @@ const ProductsAdmin = () => {
                                     src={productImagePath}
                                     alt="Current"
                                     style={{
-                                        maxWidth: '200px',
+                                        // maxWidth: '200px',
+                                        width: '100%',
                                         maxHeight: '200px',
                                         borderRadius: '8px',
                                         border: '1px solid #ddd'
@@ -667,8 +668,8 @@ const ProductsAdmin = () => {
                                     src={imagePreview}
                                     alt="New Preview"
                                     style={{
-                                        maxWidth: '200px',
-                                        maxHeight: '200px',
+                                        width: '100%',
+                                        maxHeight: '400px',
                                         borderRadius: '8px',
                                         border: '1px solid #ddd'
                                     }}
@@ -770,7 +771,7 @@ const ProductsAdmin = () => {
                             onChange={(e) => setI_Marterial(e.target.value)}
                         />
                     </div>
-                    
+
                     <div className='div-input-add-prod'>
                         <label className='add-prod-label'>Preview Image</label>
                         <input
@@ -786,7 +787,8 @@ const ProductsAdmin = () => {
                                     src={imagePreview}
                                     alt="Preview"
                                     style={{
-                                        maxWidth: '200px',
+                                        // maxWidth: '200px',
+                                        width: '100%',
                                         maxHeight: '200px',
                                         borderRadius: '8px',
                                         border: '1px solid #ddd'
@@ -904,7 +906,8 @@ const ProductsAdmin = () => {
                                     src={productImagePath}
                                     alt="Product"
                                     style={{
-                                        maxWidth: '300px',
+                                        // maxWidth: '300px',
+                                        width: '100%',
                                         maxHeight: '300px',
                                         borderRadius: '8px',
                                         border: '1px solid #ddd'
@@ -1196,7 +1199,7 @@ const ProductsAdmin = () => {
                 </div>
 
                 {/* Products Table */}
-                <div className='tableContainer' style={{ height: '40vh', overflowY: 'auto' }}>
+                {/* <div className='tableContainer' style={{ height: '40vh', overflowY: 'auto' }}>
                     {currentProductItems && currentProductItems.length > 0 ? (
                         <table className='table'>
                             <thead>
@@ -1301,6 +1304,423 @@ const ProductsAdmin = () => {
                                     : 'Try adjusting your filters to see more results.'
                                 }
                             </p>
+                        </div>
+                    )}
+                </div> */}
+
+                {/* Products Grid - Replace the table container section */}
+                <div className='products-grid-container' style={{
+                    padding: '20px 0',
+                    minHeight: '40vh'
+                }}>
+                    {currentProductItems && currentProductItems.length > 0 ? (
+                        <>
+                            {/* Grid Header with Sort Options */}
+                            <div style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                marginBottom: '20px',
+                                padding: '0 10px'
+                            }}>
+                                <div style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '15px',
+                                    flexWrap: 'wrap'
+                                }}>
+                                    <span style={{
+                                        fontWeight: '600',
+                                        color: '#495057',
+                                        fontSize: '16px'
+                                    }}>
+                                        Sort by:
+                                    </span>
+
+                                    <button
+                                        onClick={() => handleSort('product_name')}
+                                        style={{
+                                            padding: '6px 12px',
+                                            border: sortField === 'product_name' ? '2px solid #007bff' : '1px solid #ced4da',
+                                            backgroundColor: sortField === 'product_name' ? '#e7f3ff' : 'white',
+                                            borderRadius: '20px',
+                                            cursor: 'pointer',
+                                            fontSize: '14px',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '5px'
+                                        }}
+                                    >
+                                        Name {sortField === 'product_name' && renderSortArrow('product_name')}
+                                    </button>
+
+                                    <button
+                                        onClick={() => handleSort('price')}
+                                        style={{
+                                            padding: '6px 12px',
+                                            border: sortField === 'price' ? '2px solid #007bff' : '1px solid #ced4da',
+                                            backgroundColor: sortField === 'price' ? '#e7f3ff' : 'white',
+                                            borderRadius: '20px',
+                                            cursor: 'pointer',
+                                            fontSize: '14px',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '5px'
+                                        }}
+                                    >
+                                        Price {sortField === 'price' && renderSortArrow('price')}
+                                    </button>
+
+                                    <button
+                                        onClick={() => handleSort('category_name')}
+                                        style={{
+                                            padding: '6px 12px',
+                                            border: sortField === 'category_name' ? '2px solid #007bff' : '1px solid #ced4da',
+                                            backgroundColor: sortField === 'category_name' ? '#e7f3ff' : 'white',
+                                            borderRadius: '20px',
+                                            cursor: 'pointer',
+                                            fontSize: '14px',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '5px'
+                                        }}
+                                    >
+                                        Category {sortField === 'category_name' && renderSortArrow('category_name')}
+                                    </button>
+                                </div>
+
+                                <div style={{
+                                    fontSize: '14px',
+                                    color: '#6c757d',
+                                    fontWeight: '500'
+                                }}>
+                                    Showing {currentProductItems.length} of {filteredAndSortedProducts.length} products
+                                </div>
+                            </div>
+
+                            {/* Products Grid */}
+                            <div style={{
+                                display: 'grid',
+                                gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))',
+                                gap: '20px',
+                                padding: '0 10px'
+                            }}>
+                                {currentProductItems.map((product, index) => (
+                                    <div
+                                        key={index}
+                                        onClick={(e) => triggerModal('viewProduct', product.product_id, e)}
+                                        style={{
+                                            backgroundColor: 'white',
+                                            borderRadius: '12px',
+                                            boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+                                            border: '1px solid #e9ecef',
+                                            overflow: 'hidden',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.3s ease',
+                                            position: 'relative'
+                                        }}
+                                        onMouseEnter={(e) => {
+                                            e.currentTarget.style.transform = 'translateY(-4px)';
+                                            e.currentTarget.style.boxShadow = '0 8px 25px rgba(0, 0, 0, 0.15)';
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            e.currentTarget.style.transform = 'translateY(0)';
+                                            e.currentTarget.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)';
+                                        }}
+                                    >
+                                        {/* Product Image */}
+                                        <div style={{
+                                            height: '200px',
+                                            backgroundColor: '#f8f9fa',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            position: 'relative',
+                                            overflow: 'hidden'
+                                        }}>
+                                            {product.product_preview_image && product.product_preview_image !== 'Nothing as for now' ? (
+                                                <img
+                                                    src={product.product_preview_image}
+                                                    alt={product.product_name}
+                                                    style={{
+                                                        width: '100%',
+                                                        height: '100%',
+                                                        objectFit: 'cover'
+                                                    }}
+                                                />
+                                            ) : (
+                                                <div style={{
+                                                    display: 'flex',
+                                                    flexDirection: 'column',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    color: '#6c757d',
+                                                    fontSize: '14px'
+                                                }}>
+                                                    <div style={{ fontSize: '48px', marginBottom: '10px', opacity: 0.3 }}>
+                                                        📦
+                                                    </div>
+                                                    <span>No Image</span>
+                                                </div>
+                                            )}
+
+                                            {/* Category Badge */}
+                                            <div style={{
+                                                position: 'absolute',
+                                                top: '10px',
+                                                left: '10px',
+                                                backgroundColor: '#007bff',
+                                                color: 'white',
+                                                padding: '4px 8px',
+                                                borderRadius: '12px',
+                                                fontSize: '12px',
+                                                fontWeight: '500'
+                                            }}>
+                                                {product.category_name}
+                                            </div>
+
+                                            {/* Edit Action Button */}
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    triggerModal('editProduct', product.product_id, e);
+                                                }}
+                                                style={{
+                                                    position: 'absolute',
+                                                    top: '10px',
+                                                    right: '10px',
+                                                    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                                                    border: 'none',
+                                                    borderRadius: '50%',
+                                                    width: '36px',
+                                                    height: '36px',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    cursor: 'pointer',
+                                                    fontSize: '16px',
+                                                    transition: 'all 0.2s ease'
+                                                }}
+                                                onMouseEnter={(e) => {
+                                                    e.currentTarget.style.backgroundColor = '#007bff';
+                                                    e.currentTarget.style.color = 'white';
+                                                }}
+                                                onMouseLeave={(e) => {
+                                                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.9)';
+                                                    e.currentTarget.style.color = 'black';
+                                                }}
+                                                title="Edit Product"
+                                            >
+                                                ✏️
+                                            </button>
+                                        </div>
+
+                                        {/* Product Information */}
+                                        <div style={{ padding: '20px' }}>
+                                            {/* Product Name */}
+                                            <h3 style={{
+                                                margin: '0 0 10px 0',
+                                                fontSize: '18px',
+                                                fontWeight: '600',
+                                                color: '#212529',
+                                                lineHeight: '1.4'
+                                            }}>
+                                                {product.product_name}
+                                            </h3>
+
+                                            {/* Product Description */}
+                                            <p style={{
+                                                margin: '0 0 15px 0',
+                                                fontSize: '14px',
+                                                color: '#6c757d',
+                                                lineHeight: '1.5',
+                                                display: '-webkit-box',
+                                                WebkitLineClamp: 2,
+                                                WebkitBoxOrient: 'vertical',
+                                                overflow: 'hidden'
+                                            }}>
+                                                {product.description}
+                                            </p>
+
+                                            {/* Product Details Grid */}
+                                            <div style={{
+                                                display: 'grid',
+                                                gridTemplateColumns: '1fr 1fr',
+                                                gap: '10px',
+                                                marginBottom: '15px'
+                                            }}>
+                                                <div>
+                                                    <span style={{
+                                                        fontSize: '12px',
+                                                        color: '#6c757d',
+                                                        fontWeight: '500',
+                                                        display: 'block'
+                                                    }}>
+                                                        Color
+                                                    </span>
+                                                    <span style={{
+                                                        fontSize: '14px',
+                                                        color: '#495057',
+                                                        fontWeight: '500'
+                                                    }}>
+                                                        {product.color}
+                                                    </span>
+                                                </div>
+
+                                                <div>
+                                                    <span style={{
+                                                        fontSize: '12px',
+                                                        color: '#6c757d',
+                                                        fontWeight: '500',
+                                                        display: 'block'
+                                                    }}>
+                                                        Material
+                                                    </span>
+                                                    <span style={{
+                                                        fontSize: '14px',
+                                                        color: '#495057',
+                                                        fontWeight: '500'
+                                                    }}>
+                                                        {product.material}
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            {/* Dimensions */}
+                                            <div style={{ marginBottom: '15px' }}>
+                                                <span style={{
+                                                    fontSize: '12px',
+                                                    color: '#6c757d',
+                                                    fontWeight: '500',
+                                                    display: 'block'
+                                                }}>
+                                                    Dimensions
+                                                </span>
+                                                <span style={{
+                                                    fontSize: '14px',
+                                                    color: '#495057',
+                                                    fontWeight: '500'
+                                                }}>
+                                                    {product.dimensions}
+                                                </span>
+                                            </div>
+
+                                            {/* Price and Sales */}
+                                            <div style={{
+                                                display: 'flex',
+                                                justifyContent: 'space-between',
+                                                alignItems: 'center',
+                                                paddingTop: '15px',
+                                                borderTop: '1px solid #e9ecef'
+                                            }}>
+                                                <div>
+                                                    <span style={{
+                                                        fontSize: '12px',
+                                                        color: '#6c757d',
+                                                        fontWeight: '500',
+                                                        display: 'block'
+                                                    }}>
+                                                        Price
+                                                    </span>
+                                                    <span style={{
+                                                        fontSize: '20px',
+                                                        color: '#28a745',
+                                                        fontWeight: '700'
+                                                    }}>
+                                                        ₱{parseFloat(product.price || 0).toLocaleString('en-US', {
+                                                            minimumFractionDigits: 2,
+                                                            maximumFractionDigits: 2
+                                                        })}
+                                                    </span>
+                                                </div>
+
+                                                <div style={{ textAlign: 'right' }}>
+                                                    <span style={{
+                                                        fontSize: '12px',
+                                                        color: '#6c757d',
+                                                        fontWeight: '500',
+                                                        display: 'block'
+                                                    }}>
+                                                        Total Sales
+                                                    </span>
+                                                    <span style={{
+                                                        fontSize: '16px',
+                                                        color: '#495057',
+                                                        fontWeight: '600'
+                                                    }}>
+                                                        0
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </>
+                    ) : (
+                        <div style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            height: '100%',
+                            textAlign: 'center',
+                            color: '#6c757d',
+                            padding: '60px 20px',
+                            minHeight: '400px'
+                        }}>
+                            <div style={{
+                                fontSize: '64px',
+                                marginBottom: '24px',
+                                opacity: 0.3
+                            }}>
+                                📦
+                            </div>
+                            <h3 style={{
+                                color: '#495057',
+                                marginBottom: '12px',
+                                fontWeight: '600',
+                                fontSize: '24px'
+                            }}>
+                                {productList.length === 0 ? 'No products available' : 'No products match the current filters'}
+                            </h3>
+                            <p style={{
+                                margin: '0',
+                                fontSize: '16px',
+                                maxWidth: '400px',
+                                lineHeight: '1.5',
+                                color: '#6c757d'
+                            }}>
+                                {productList.length === 0
+                                    ? 'Start by adding your first product using the "ADD PRODUCT+" button above.'
+                                    : 'Try adjusting your filters or search terms to see more products.'
+                                }
+                            </p>
+                            {productList.length === 0 && (
+                                <button
+                                    onClick={(e) => triggerModal('addProduct', '0', e)}
+                                    style={{
+                                        marginTop: '20px',
+                                        padding: '12px 24px',
+                                        backgroundColor: '#007bff',
+                                        color: 'white',
+                                        border: 'none',
+                                        borderRadius: '8px',
+                                        cursor: 'pointer',
+                                        fontSize: '16px',
+                                        fontWeight: '500',
+                                        transition: 'background-color 0.2s ease'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        e.currentTarget.style.backgroundColor = '#0056b3';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.currentTarget.style.backgroundColor = '#007bff';
+                                    }}
+                                >
+                                    Add Your First Product
+                                </button>
+                            )}
                         </div>
                     )}
                 </div>

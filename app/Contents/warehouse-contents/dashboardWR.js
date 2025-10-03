@@ -43,6 +43,10 @@ const DashboardWR = ({ setActivePage, setExpandedParent }) => {
     const [deleveredList, setDeliveredList] = useState([]);
 
     useEffect(() => {
+        const user_id = sessionStorage.getItem("user_id");
+        if (!user_id){
+            return;
+        }
         countConfigs.forEach(config => fetchCount(config));
         GetRequest();
         GetOngoingReq();

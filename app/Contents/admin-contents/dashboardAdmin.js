@@ -34,6 +34,10 @@ const DashboardAdmin = ({ onNavigateToSales }) => {
         </span>
     );
 
+    const [installmentList, setInstallmentList] = useState([]);
+    const [overdueCustomers, setOverdueCustomers] = useState([]);
+    const [customerList, setCustomerList] = useState([]);
+
     const [counts, setCounts] = useState({
         prodCount: '0',
         categoryCount: '0',
@@ -44,7 +48,156 @@ const DashboardAdmin = ({ onNavigateToSales }) => {
         montlySales: '0.00',
         dailySales: '0.00',
         weeklySales: '0.00',
+
+        dailyCollection: '0.00',
+        weeklyCollection: '0.00',
+        monthlyCollection: '0.00',
+        totalCustomersWithDue: '0',
+        dailyDueCustomers: '0',
+        weeklyDueCustomers: '0',
+        monthlyDueCustomers: '0',
+        overdueAmount: '0.00'
     });
+
+    const GetCustomer = async () => {
+        const baseURL = sessionStorage.getItem('baseURL');
+        const url = baseURL + 'customer.php';
+
+        try {
+            const response = await axios.get(url, {
+                params: {
+                    json: JSON.stringify([]),
+                    operation: "GetCustomer"
+                }
+            });
+            setCustomerList(response.data);
+        } catch (error) {
+            console.error("Error fetching customer list:", error);
+        }
+    };
+
+    const GetCustName = (custID) => {
+        const cust = customerList.find(custs => custs.cust_id == custID);
+        return cust ? cust.cust_name : "Unknown Customer";
+    };
+
+    const GetInstallment = async () => {
+        try {
+            const baseURL = sessionStorage.getItem('baseURL');
+            const response = await axios.get(`${baseURL}installment.php`, {
+                params: {
+                    json: JSON.stringify([]),
+                    operation: "GetAllInstallmentD"
+                }
+            });
+
+            setInstallmentList(response.data);
+            calculateCollections(response.data);
+            calculateOverdueCustomers(response.data);
+        } catch (error) {
+            console.error("Error fetching installments:", error);
+        }
+    };
+
+    const calculateCollections = (installments) => {
+        if (!installments || installments.length === 0) return;
+
+        const today = new Date();
+        const todayStr = today.toISOString().split('T')[0];
+
+        // Week calculation
+        const startOfWeek = new Date(today);
+        startOfWeek.setDate(today.getDate() - today.getDay());
+        const endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(startOfWeek.getDate() + 6);
+
+        // Month calculation
+        const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+        const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+
+        let dailyCollection = 0, weeklyCollection = 0, monthlyCollection = 0;
+        let dailyDueCustomers = new Set(), weeklyDueCustomers = new Set(), monthlyDueCustomers = new Set();
+        let totalCustomersWithDue = new Set();
+
+        installments.forEach(installment => {
+            if (installment.status === 'UNPAID') {
+                const dueDate = installment.due_date;
+                const amount = parseFloat(installment.amount_due) || 0;
+
+                totalCustomersWithDue.add(installment.installment_id);
+
+                if (dueDate === todayStr) {
+                    dailyCollection += amount;
+                    dailyDueCustomers.add(installment.installment_id);
+                }
+
+                if (dueDate >= startOfWeek.toISOString().split('T')[0] &&
+                    dueDate <= endOfWeek.toISOString().split('T')[0]) {
+                    weeklyCollection += amount;
+                    weeklyDueCustomers.add(installment.installment_id);
+                }
+
+                if (dueDate >= startOfMonth.toISOString().split('T')[0] &&
+                    dueDate <= endOfMonth.toISOString().split('T')[0]) {
+                    monthlyCollection += amount;
+                    monthlyDueCustomers.add(installment.installment_id);
+                }
+            }
+        });
+
+        setCounts(prev => ({
+            ...prev,
+            dailyCollection: new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(dailyCollection),
+            weeklyCollection: new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(weeklyCollection),
+            monthlyCollection: new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(monthlyCollection),
+            totalCustomersWithDue: totalCustomersWithDue.size.toString(),
+            dailyDueCustomers: dailyDueCustomers.size.toString(),
+            weeklyDueCustomers: weeklyDueCustomers.size.toString(),
+            monthlyDueCustomers: monthlyDueCustomers.size.toString()
+        }));
+    };
+
+    const calculateOverdueCustomers = (installments) => {
+        if (!installments || installments.length === 0) {
+            setOverdueCustomers([]);
+            return;
+        }
+
+        const today = new Date();
+        const todayStr = today.toISOString().split('T')[0];
+        const GRACE_PERIOD_DAYS = 3;
+
+        const overdue = installments.filter(installment => {
+            return installment.status === 'UNPAID' && installment.due_date < todayStr;
+        }).map(installment => {
+            const dueDate = new Date(installment.due_date);
+            const daysPastDue = Math.floor((today - dueDate) / (1000 * 60 * 60 * 24));
+            const hasPenalty = daysPastDue > GRACE_PERIOD_DAYS;
+            const daysUntilPenalty = hasPenalty ? 0 : GRACE_PERIOD_DAYS - daysPastDue;
+            const baseAmount = parseFloat(installment.amount_due) || 0;
+            const amountWithPenalty = hasPenalty ? baseAmount * 1.05 : baseAmount;
+
+            return {
+                ...installment,
+                daysPastDue,
+                hasPenalty,
+                daysUntilPenalty,
+                baseAmount,
+                amountWithPenalty
+            };
+        }).sort((a, b) => b.daysPastDue - a.daysPastDue);
+
+        setOverdueCustomers(overdue);
+
+        const totalOverdue = overdue.reduce((sum, customer) => {
+            return sum + (customer.amountWithPenalty || 0);
+        }, 0);
+
+        setCounts(prev => ({
+            ...prev,
+            overdueAmount: new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(totalOverdue)
+        }));
+    };
 
     const countConfigs = [
         { id: 'product_id', from: 'products', name: 'product_count', stateKey: 'prodCount' },
@@ -57,12 +210,21 @@ const DashboardAdmin = ({ onNavigateToSales }) => {
     const [salesByInvoice, setSalesByInvoice] = useState([]);
 
     useEffect(() => {
+        const user_id = sessionStorage.getItem("user_id");
+        if (!user_id) return;
+
+        // Your existing calls
         GetSalesByInvoice();
+        countConfigs.forEach(config => fetchCount(config));
+
+        // ADD THESE NEW CALLS:
+        GetCustomer();
+        GetInstallment();
     }, []);
 
-    useEffect(() => {
-        countConfigs.forEach(config => fetchCount(config));
-    }, []);
+    // useEffect(() => {
+    //     countConfigs.forEach(config => fetchCount(config));
+    // }, []);
 
     const fetchCount = async ({ id, from, name, stateKey }) => {
         const baseURL = sessionStorage.getItem('baseURL');
@@ -265,10 +427,13 @@ const DashboardAdmin = ({ onNavigateToSales }) => {
         if (!data || data.length === 0) {
             return (
                 <div className="card shadow" style={{ marginBottom: '20px' }}>
-                    <div className="card-body">
-                        <h5 className="card-title">{title}</h5>
-                        <div style={{ height: '300px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <p className="text-muted">No data available</p>
+                    <div className="card-body" style={{ padding: '24px' }}>
+                        <h5 className="card-title" style={{ fontSize: '18px', fontWeight: '600', marginBottom: '24px' }}>{title}</h5>
+                        <div style={{ height: '400px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <div style={{ textAlign: 'center' }}>
+                                <div style={{ fontSize: '48px', color: '#e9ecef', marginBottom: '16px' }}>📊</div>
+                                <p className="text-muted" style={{ fontSize: '16px', margin: 0 }}>No data available</p>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -279,10 +444,13 @@ const DashboardAdmin = ({ onNavigateToSales }) => {
         if (validData.length === 0) {
             return (
                 <div className="card shadow" style={{ marginBottom: '20px' }}>
-                    <div className="card-body">
-                        <h5 className="card-title">{title}</h5>
-                        <div style={{ height: '300px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <p className="text-muted">No valid data available</p>
+                    <div className="card-body" style={{ padding: '24px' }}>
+                        <h5 className="card-title" style={{ fontSize: '18px', fontWeight: '600', marginBottom: '24px' }}>{title}</h5>
+                        <div style={{ height: '400px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <div style={{ textAlign: 'center' }}>
+                                <div style={{ fontSize: '48px', color: '#e9ecef', marginBottom: '16px' }}>⚠️</div>
+                                <p className="text-muted" style={{ fontSize: '16px', margin: 0 }}>No valid data available</p>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -291,82 +459,337 @@ const DashboardAdmin = ({ onNavigateToSales }) => {
 
         const maxValue = Math.max(...validData.map(item => item.sales));
         const minValue = Math.min(...validData.map(item => item.sales));
+        const average = validData.reduce((sum, item) => sum + item.sales, 0) / validData.length;
+        const total = validData.reduce((sum, item) => sum + item.sales, 0);
+
+        // Enhanced color palette for bars
+        const getBarColor = (value, index) => {
+            const intensity = value / maxValue;
+            if (intensity >= 0.8) return '#10b981'; // High performance - Green
+            if (intensity >= 0.6) return '#3b82f6'; // Good performance - Blue
+            if (intensity >= 0.4) return '#f59e0b'; // Average performance - Orange
+            return '#ef4444'; // Low performance - Red
+        };
 
         return (
             <div className="card shadow" style={{ marginBottom: '20px', transition: 'all 0.3s ease' }}>
-                <div className="card-body">
-                    <h5 className="card-title">{title}</h5>
+                <div className="card-body" style={{ padding: '24px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '32px' }}>
+                        <div>
+                            <h5 className="card-title" style={{ fontSize: '18px', fontWeight: '600', margin: 0, marginBottom: '4px' }}>
+                                {title}
+                            </h5>
+                            <p style={{ color: '#6c757d', fontSize: '14px', margin: 0 }}>
+                                Daily performance overview
+                            </p>
+                        </div>
+                        <div style={{
+                            backgroundColor: '#f8f9fa',
+                            padding: '8px 16px',
+                            borderRadius: '8px',
+                            border: '1px solid #e9ecef',
+                            textAlign: 'center',
+                            minWidth: '120px'
+                        }}>
+                            <div style={{ fontSize: '20px', fontWeight: '700', color: '#495057', lineHeight: '1' }}>
+                                ₱{(total / 1000000).toFixed(1)}M
+                            </div>
+                            <div style={{ fontSize: '11px', color: '#6c757d', fontWeight: '500', marginTop: '2px' }}>
+                                Total Revenue
+                            </div>
+                        </div>
+                    </div>
 
-                    {/* Chart Container with Y-axis labels */}
-                    <div style={{ height: '320px', display: 'flex' }}>
-                        {/* Y-axis labels */}
-                        <div style={{ width: '60px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', paddingRight: '10px', paddingTop: '20px', paddingBottom: '40px' }}>
-                            <small style={{ color: '#6c757d', fontSize: '11px' }}>₱{maxValue.toLocaleString()}</small>
-                            <small style={{ color: '#6c757d', fontSize: '11px' }}>₱{(maxValue * 0.75).toFixed(0).toLocaleString()}</small>
-                            <small style={{ color: '#6c757d', fontSize: '11px' }}>₱{(maxValue * 0.5).toFixed(0).toLocaleString()}</small>
-                            <small style={{ color: '#6c757d', fontSize: '11px' }}>₱{(maxValue * 0.25).toFixed(0).toLocaleString()}</small>
-                            <small style={{ color: '#6c757d', fontSize: '11px' }}>₱0</small>
+                    {/* Enhanced Chart Container */}
+                    <div style={{ height: '420px', display: 'flex', gap: '16px' }}>
+                        {/* Y-axis with better spacing and formatting */}
+                        <div style={{
+                            width: '90px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            justifyContent: 'space-between',
+                            paddingRight: '12px',
+                            paddingTop: '24px',
+                            paddingBottom: '60px',
+                            position: 'relative'
+                        }}>
+                            {/* Y-axis line */}
+                            <div style={{
+                                position: 'absolute',
+                                right: '12px',
+                                top: '24px',
+                                bottom: '60px',
+                                width: '1px',
+                                backgroundColor: '#dee2e6'
+                            }}></div>
+
+                            {[1, 0.75, 0.5, 0.25, 0].map((ratio, index) => (
+                                <div key={index} style={{
+                                    textAlign: 'right',
+                                    position: 'relative'
+                                }}>
+                                    <small style={{
+                                        color: index === 0 || index === 4 ? '#495057' : '#6c757d',
+                                        fontSize: '11px',
+                                        fontWeight: index === 0 || index === 4 ? '600' : '400'
+                                    }}>
+                                        ₱{((maxValue * ratio) / 1000000).toFixed(1)}M
+                                    </small>
+                                    {/* Grid line indicator */}
+                                    <div style={{
+                                        position: 'absolute',
+                                        right: '-12px',
+                                        top: '50%',
+                                        transform: 'translateY(-50%)',
+                                        width: '8px',
+                                        height: '1px',
+                                        backgroundColor: '#dee2e6'
+                                    }}></div>
+                                </div>
+                            ))}
                         </div>
 
-                        {/* Chart Area */}
+                        {/* Enhanced Chart Area */}
                         <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                            <div style={{ height: '250px', display: 'flex', alignItems: 'end', justifyContent: 'space-between', paddingTop: '20px' }}>
-                                {validData.map((item, index) => (
-                                    <div key={index} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: '1', margin: '0 2px' }}>
-                                        <div
-                                            style={{
-                                                width: '100%',
-                                                backgroundColor: '#007bff',
-                                                borderRadius: '4px 4px 0 0',
-                                                height: `${maxValue > 0 ? ((item.sales || 0) / maxValue) * 220 : 5}px`,
-                                                minHeight: '5px',
-                                                position: 'relative',
-                                                transition: 'background-color 0.3s ease',
-                                                cursor: 'pointer',
-                                                display: 'flex',
-                                                alignItems: 'flex-end',
-                                                justifyContent: 'center',
-                                                color: 'white',
-                                                fontSize: '10px',
-                                                fontWeight: 'bold'
-                                            }}
-                                            onMouseEnter={(e) => e.target.style.backgroundColor = '#0056b3'}
-                                            onMouseLeave={(e) => e.target.style.backgroundColor = '#007bff'}
-                                            title={`${item.day}: ₱${(item.sales || 0).toLocaleString()}`}
-                                        >
-                                            {item.sales > maxValue * 0.1 && (
-                                                <span style={{ padding: '2px', textShadow: '1px 1px 1px rgba(0,0,0,0.5)' }}>
-                                                    ₱{(item.sales / 1000).toFixed(0)}k
-                                                </span>
-                                            )}
-                                        </div>
-                                    </div>
+                            <div style={{
+                                height: '340px',
+                                display: 'flex',
+                                alignItems: 'end',
+                                gap: '8px',
+                                paddingTop: '24px',
+                                paddingLeft: '8px',
+                                paddingRight: '8px',
+                                position: 'relative'
+                            }}>
+                                {/* Horizontal grid lines */}
+                                {[0, 0.25, 0.5, 0.75, 1].map((ratio, index) => (
+                                    <div
+                                        key={index}
+                                        style={{
+                                            position: 'absolute',
+                                            left: '0',
+                                            right: '0',
+                                            bottom: `${60 + (ratio * 316)}px`,
+                                            height: '1px',
+                                            backgroundColor: index === 0 ? '#dee2e6' : '#f1f3f4',
+                                            opacity: index === 0 ? 1 : 0.7,
+                                            zIndex: 1
+                                        }}
+                                    />
                                 ))}
+
+                                {/* Average line indicator */}
+                                <div
+                                    style={{
+                                        position: 'absolute',
+                                        left: '0',
+                                        right: '0',
+                                        bottom: `${60 + ((average / maxValue) * 316)}px`,
+                                        height: '2px',
+                                        backgroundColor: '#8b5cf6',
+                                        opacity: 0.6,
+                                        zIndex: 2
+                                    }}
+                                />
+                                <div
+                                    style={{
+                                        position: 'absolute',
+                                        right: '12px',
+                                        bottom: `${65 + ((average / maxValue) * 316)}px`,
+                                        backgroundColor: '#8b5cf6',
+                                        color: 'white',
+                                        padding: '2px 8px',
+                                        borderRadius: '12px',
+                                        fontSize: '10px',
+                                        fontWeight: '600',
+                                        zIndex: 3
+                                    }}
+                                >
+                                    AVG: ₱{(average / 1000).toFixed(0)}K
+                                </div>
+
+                                {/* Enhanced Bars */}
+                                {validData.map((item, index) => {
+                                    const barHeight = maxValue > 0 ? ((item.sales || 0) / maxValue) * 316 : 8;
+                                    const barColor = getBarColor(item.sales, index);
+
+                                    return (
+                                        <div key={index} style={{
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            alignItems: 'center',
+                                            flex: '1',
+                                            position: 'relative',
+                                            zIndex: 10
+                                        }}>
+                                            {/* Value label on top of bar */}
+                                            {barHeight > 30 && (
+                                                <div
+                                                    style={{
+                                                        position: 'absolute',
+                                                        bottom: `${barHeight + 8}px`,
+                                                        backgroundColor: 'white',
+                                                        color: barColor,
+                                                        padding: '4px 8px',
+                                                        borderRadius: '6px',
+                                                        fontSize: '11px',
+                                                        fontWeight: '600',
+                                                        border: `1px solid ${barColor}`,
+                                                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                                                        whiteSpace: 'nowrap',
+                                                        zIndex: 15
+                                                    }}
+                                                >
+                                                    ₱{(item.sales / 1000).toFixed(0)}K
+                                                </div>
+                                            )}
+
+                                            {/* Enhanced Bar */}
+                                            <div
+                                                style={{
+                                                    width: '100%',
+                                                    maxWidth: '60px',
+                                                    backgroundColor: barColor,
+                                                    borderRadius: '6px 6px 0 0',
+                                                    height: `${Math.max(barHeight, 8)}px`,
+                                                    position: 'relative',
+                                                    transition: 'all 0.3s ease',
+                                                    cursor: 'pointer',
+                                                    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                                                    backgroundImage: `linear-gradient(180deg, ${barColor}dd, ${barColor})`,
+                                                    overflow: 'hidden'
+                                                }}
+                                                onMouseEnter={(e) => {
+                                                    e.target.style.transform = 'scaleY(1.05)';
+                                                    e.target.style.boxShadow = '0 4px 12px rgba(0,0,0,0.2)';
+                                                }}
+                                                onMouseLeave={(e) => {
+                                                    e.target.style.transform = 'scaleY(1)';
+                                                    e.target.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
+                                                }}
+                                                title={`${item.day}: ₱${(item.sales || 0).toLocaleString()}`}
+                                            >
+                                                {/* Subtle highlight effect */}
+                                                <div style={{
+                                                    position: 'absolute',
+                                                    top: 0,
+                                                    left: 0,
+                                                    right: 0,
+                                                    height: '30%',
+                                                    background: 'linear-gradient(180deg, rgba(255,255,255,0.3), transparent)',
+                                                    borderRadius: '6px 6px 0 0'
+                                                }}></div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
                             </div>
 
-                            {/* X-axis labels */}
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', paddingLeft: '10px', paddingRight: '10px' }}>
+                            {/* Enhanced X-axis labels */}
+                            <div style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                marginTop: '16px',
+                                paddingLeft: '8px',
+                                paddingRight: '8px',
+                                paddingTop: '12px',
+                                borderTop: '1px solid #e9ecef'
+                            }}>
                                 {validData.map((item, index) => (
-                                    <small key={index} style={{ color: '#6c757d', fontWeight: 'bold' }}>{item.day}</small>
+                                    <div key={index} style={{
+                                        textAlign: 'center',
+                                        flex: '1',
+                                        maxWidth: '60px'
+                                    }}>
+                                        <div style={{
+                                            color: '#495057',
+                                            fontWeight: '600',
+                                            fontSize: '13px',
+                                            marginBottom: '2px'
+                                        }}>
+                                            {item.day}
+                                        </div>
+                                        <div style={{
+                                            color: '#6c757d',
+                                            fontSize: '10px',
+                                            fontWeight: '400'
+                                        }}>
+                                            {((item.sales / total) * 100).toFixed(1)}%
+                                        </div>
+                                    </div>
                                 ))}
                             </div>
                         </div>
                     </div>
 
-                    {/* Legend and Statistics */}
-                    <div style={{ marginTop: '15px', padding: '10px', backgroundColor: '#f8f9fa', borderRadius: '5px' }}>
+                    {/* Enhanced Legend and Statistics */}
+                    <div style={{
+                        marginTop: '24px',
+                        padding: '20px',
+                        backgroundColor: '#f8f9fa',
+                        borderRadius: '12px',
+                        border: '1px solid #e9ecef'
+                    }}>
                         <div className="row">
-                            <div className="col-md-6">
-                                <small style={{ color: '#495057', fontWeight: 'bold' }}>Statistics:</small>
-                                <div style={{ fontSize: '12px', color: '#6c757d' }}>
-                                    <div>Max: ₱{maxValue.toLocaleString()}</div>
-                                    <div>Min: ₱{minValue.toLocaleString()}</div>
-                                    <div>Avg: ₱{(validData.reduce((sum, item) => sum + item.sales, 0) / validData.length).toFixed(0).toLocaleString()}</div>
+                            <div className="col-md-12">
+                                <div style={{ marginBottom: '16px' }}>
+                                    <h6 style={{ color: '#495057', fontWeight: '600', fontSize: '14px', margin: 0, marginBottom: '12px' }}>
+                                        Performance Legend
+                                    </h6>
+                                    <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
+                                        {[
+                                            { color: '#10b981', label: 'Excellent (80%+)', range: '80%+' },
+                                            { color: '#3b82f6', label: 'Good (60-80%)', range: '60-80%' },
+                                            { color: '#f59e0b', label: 'Average (40-60%)', range: '40-60%' },
+                                            { color: '#ef4444', label: 'Below Average (<40%)', range: '<40%' }
+                                        ].map((item, index) => (
+                                            <div key={index} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                <div style={{
+                                                    width: '12px',
+                                                    height: '12px',
+                                                    backgroundColor: item.color,
+                                                    borderRadius: '2px'
+                                                }}></div>
+                                                <span style={{
+                                                    fontSize: '11px',
+                                                    color: '#6c757d',
+                                                    fontWeight: '500'
+                                                }}>
+                                                    {item.label}
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <h6 style={{ color: '#495057', fontWeight: '600', fontSize: '14px', margin: 0, marginBottom: '8px' }}>
+                                        Key Statistics
+                                    </h6>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+                                        <div style={{ textAlign: 'center', padding: '8px', backgroundColor: 'white', borderRadius: '6px' }}>
+                                            <div style={{ fontSize: '16px', fontWeight: '700', color: '#10b981' }}>
+                                                ₱{(maxValue / 1000).toFixed(0)}K
+                                            </div>
+                                            <div style={{ fontSize: '10px', color: '#6c757d', fontWeight: '500' }}>Peak Day</div>
+                                        </div>
+                                        <div style={{ textAlign: 'center', padding: '8px', backgroundColor: 'white', borderRadius: '6px' }}>
+                                            <div style={{ fontSize: '16px', fontWeight: '700', color: '#ef4444' }}>
+                                                ₱{(minValue / 1000).toFixed(0)}K
+                                            </div>
+                                            <div style={{ fontSize: '10px', color: '#6c757d', fontWeight: '500' }}>Lowest Day</div>
+                                        </div>
+                                        <div style={{ textAlign: 'center', padding: '8px', backgroundColor: 'white', borderRadius: '6px' }}>
+                                            <div style={{ fontSize: '16px', fontWeight: '700', color: '#8b5cf6' }}>
+                                                ₱{(average / 1000).toFixed(0)}K
+                                            </div>
+                                            <div style={{ fontSize: '10px', color: '#6c757d', fontWeight: '500' }}>Daily Average</div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
-                            <div className="col-md-6">
-                                <small style={{ color: '#495057', fontWeight: 'bold' }}>Total Week: ₱{validData.reduce((sum, item) => sum + item.sales, 0).toLocaleString()}</small>
-                            </div>
+
+
                         </div>
                     </div>
                 </div>
@@ -378,10 +801,13 @@ const DashboardAdmin = ({ onNavigateToSales }) => {
         if (!data || data.length === 0) {
             return (
                 <div className="card shadow" style={{ marginBottom: '20px' }}>
-                    <div className="card-body">
-                        <h5 className="card-title">{title}</h5>
-                        <div style={{ height: '300px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <p className="text-muted">No data available</p>
+                    <div className="card-body" style={{ padding: '24px' }}>
+                        <h5 className="card-title" style={{ fontSize: '18px', fontWeight: '600', marginBottom: '24px' }}>{title}</h5>
+                        <div style={{ height: '450px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <div style={{ textAlign: 'center' }}>
+                                <div style={{ fontSize: '48px', color: '#e9ecef', marginBottom: '16px' }}>📈</div>
+                                <p className="text-muted" style={{ fontSize: '16px', margin: 0 }}>No data available</p>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -392,149 +818,528 @@ const DashboardAdmin = ({ onNavigateToSales }) => {
         if (validData.length === 0) {
             return (
                 <div className="card shadow" style={{ marginBottom: '20px' }}>
-                    <div className="card-body">
-                        <h5 className="card-title">{title}</h5>
-                        <div style={{ height: '300px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <p className="text-muted">No valid data available</p>
+                    <div className="card-body" style={{ padding: '24px' }}>
+                        <h5 className="card-title" style={{ fontSize: '18px', fontWeight: '600', marginBottom: '24px' }}>{title}</h5>
+                        <div style={{ height: '450px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <div style={{ textAlign: 'center' }}>
+                                <div style={{ fontSize: '48px', color: '#e9ecef', marginBottom: '16px' }}>⚠️</div>
+                                <p className="text-muted" style={{ fontSize: '16px', margin: 0 }}>No valid data available</p>
+                            </div>
                         </div>
                     </div>
                 </div>
             );
         }
 
+        // Enhanced data calculations
         const salesValues = validData.map(item => item.sales);
         const maxValue = Math.max(...salesValues);
         const minValue = Math.min(...salesValues);
         const range = maxValue - minValue || 1;
+        const average = salesValues.reduce((sum, val) => sum + val, 0) / salesValues.length;
+        const total = salesValues.reduce((sum, val) => sum + val, 0);
+
+        // Calculate trend (growth/decline) - handle edge cases
+        const trend = validData.length > 1 && validData[0].sales > 0 ?
+            ((validData[validData.length - 1].sales - validData[0].sales) / validData[0].sales * 100) :
+            validData.length > 1 ?
+                ((validData[validData.length - 1].sales - validData[0].sales) / Math.max(validData[0].sales, 1) * 100) : 0;
+        // alert(trend);
+
+        // Enhanced points calculation with better spacing
+        const chartWidth = 420;
+        const chartHeight = 300;
+        const padding = 40;
 
         const points = validData.map((item, index) => {
-            const x = validData.length > 1 ? (index / (validData.length - 1)) * 300 : 150;
-            const y = 180 - ((item.sales - minValue) / range) * 160;
-            return { x: isNaN(x) ? 150 : x, y: isNaN(y) ? 180 : y, ...item };
+            const x = validData.length > 1 ? padding + (index / (validData.length - 1)) * (chartWidth - 2 * padding) : chartWidth / 2;
+            const y = chartHeight - padding - ((item.sales - minValue) / range) * (chartHeight - 2 * padding);
+
+            return {
+                x: isNaN(x) ? chartWidth / 2 : x,
+                y: isNaN(y) ? chartHeight - padding : y,
+                ...item,
+                isHighest: item.sales === maxValue,
+                isLowest: item.sales === minValue
+            };
         });
 
         const pathPoints = points.map(p => `${p.x},${p.y}`).join(' ');
 
-        return (
-            <div className="card shadow" style={{ marginBottom: '20px' }}>
-                <div className="card-body">
-                    <h5 className="card-title">{title}</h5>
+        // Calculate volatility
+        const volatility = salesValues.length > 1 ?
+            Math.sqrt(salesValues.reduce((sum, val) => sum + Math.pow(val - average, 2), 0) / salesValues.length) : 0;
 
-                    <div style={{ display: 'flex' }}>
-                        {/* Y-axis labels */}
-                        <div style={{ width: '50px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', paddingRight: '10px', height: '200px' }}>
-                            <small style={{ color: '#6c757d', fontSize: '10px' }}>₱{maxValue.toLocaleString()}</small>
-                            <small style={{ color: '#6c757d', fontSize: '10px' }}>₱{(minValue + range * 0.75).toFixed(0).toLocaleString()}</small>
-                            <small style={{ color: '#6c757d', fontSize: '10px' }}>₱{(minValue + range * 0.5).toFixed(0).toLocaleString()}</small>
-                            <small style={{ color: '#6c757d', fontSize: '10px' }}>₱{(minValue + range * 0.25).toFixed(0).toLocaleString()}</small>
-                            <small style={{ color: '#6c757d', fontSize: '10px' }}>₱{minValue.toLocaleString()}</small>
+        return (
+            <div className="card shadow" style={{ marginBottom: '20px', minHeight: '650px' }}>
+                <div className="card-body" style={{ padding: '24px' }}>
+                    {/* Enhanced Header */}
+                    <div style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'flex-start',
+                        marginBottom: '32px',
+                        paddingBottom: '16px',
+                        borderBottom: '2px solid #e9ecef'
+                    }}>
+                        <div>
+                            <h5 className="card-title" style={{
+                                fontSize: '18px',
+                                fontWeight: '600',
+                                margin: 0,
+                                marginBottom: '4px'
+                            }}>
+                                {title}
+                            </h5>
+                            <p style={{
+                                color: '#6c757d',
+                                fontSize: '14px',
+                                margin: 0,
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '12px'
+                            }}>
+                                <span>Trend analysis over {validData.length} periods</span>
+
+                            </p>
                         </div>
 
-                        {/* Chart */}
-                        <div style={{ textAlign: 'center', flex: 1 }}>
-                            <svg width="320" height="200">
+                        {/* Quick Stats Display */}
+                        <div style={{ display: 'flex', gap: '16px' }}>
+                            <div style={{
+                                backgroundColor: '#f8f9fa',
+                                padding: '12px 16px',
+                                borderRadius: '8px',
+                                textAlign: 'center',
+                                border: '1px solid #e9ecef',
+                                minWidth: '120px'
+                            }}>
+                                <div style={{ fontSize: '20px', fontWeight: '700', color: '#10b981', lineHeight: '1' }}>
+                                    ₱{(total / 1000000).toFixed(1)}M
+                                </div>
+                                <div style={{ fontSize: '11px', color: '#6c757d', fontWeight: '500', marginTop: '2px' }}>
+                                    Total Revenue
+                                </div>
+                            </div>
+
+                            <div style={{
+                                backgroundColor: '#f8f9fa',
+                                padding: '12px 16px',
+                                borderRadius: '8px',
+                                textAlign: 'center',
+                                border: '1px solid #e9ecef',
+                                minWidth: '120px'
+                            }}>
+                                <div style={{ fontSize: '20px', fontWeight: '700', color: '#3b82f6', lineHeight: '1' }}>
+                                    ₱{(average / 1000).toFixed(0)}K
+                                </div>
+                                <div style={{ fontSize: '11px', color: '#6c757d', fontWeight: '500', marginTop: '2px' }}>
+                                    Daily Average
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Enhanced Chart Container */}
+                    <div style={{ display: 'flex', gap: '20px', marginBottom: '24px' }}>
+                        {/* Enhanced Y-axis labels */}
+                        <div style={{
+                            width: '100px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            justifyContent: 'space-between',
+                            paddingRight: '16px',
+                            height: `${chartHeight}px`,
+                            paddingTop: `${padding}px`,
+                            paddingBottom: `${padding}px`,
+                            position: 'relative'
+                        }}>
+                            {/* Y-axis line */}
+                            <div style={{
+                                position: 'absolute',
+                                right: '16px',
+                                top: `${padding}px`,
+                                bottom: `${padding}px`,
+                                width: '2px',
+                                backgroundColor: '#dee2e6'
+                            }}></div>
+
+                            {[1, 0.75, 0.5, 0.25, 0].map((ratio, index) => (
+                                <div key={index} style={{
+                                    textAlign: 'right',
+                                    position: 'relative',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'flex-end'
+                                }}>
+                                    <div style={{
+                                        backgroundColor: 'white',
+                                        padding: '4px 8px',
+                                        borderRadius: '4px',
+                                        border: '1px solid #e9ecef'
+                                    }}>
+                                        <small style={{
+                                            color: index === 0 || index === 4 ? '#495057' : '#6c757d',
+                                            fontSize: '11px',
+                                            fontWeight: index === 0 || index === 4 ? '600' : '400'
+                                        }}>
+                                            ₱{((minValue + range * ratio) / 1000).toFixed(0)}K
+                                        </small>
+                                    </div>
+                                    {/* Grid line indicator */}
+                                    <div style={{
+                                        position: 'absolute',
+                                        right: '-16px',
+                                        width: '12px',
+                                        height: '2px',
+                                        backgroundColor: '#dee2e6'
+                                    }}></div>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Enhanced Chart Area */}
+                        <div style={{ flex: 1, position: 'relative' }}>
+                            <svg width={chartWidth} height={chartHeight} style={{ overflow: 'visible' }}>
                                 <defs>
-                                    <linearGradient id="gradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                                        <stop offset="0%" style={{ stopColor: '#007bff', stopOpacity: 0.3 }} />
-                                        <stop offset="100%" style={{ stopColor: '#007bff', stopOpacity: 0.1 }} />
+                                    {/* Enhanced gradients */}
+                                    <linearGradient id="areaGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                                        <stop offset="0%" style={{ stopColor: '#4f46e5', stopOpacity: 0.3 }} />
+                                        <stop offset="100%" style={{ stopColor: '#4f46e5', stopOpacity: 0.05 }} />
                                     </linearGradient>
+
+                                    {/* Drop shadow for line and points */}
+                                    <filter id="dropshadow" x="-50%" y="-50%" width="200%" height="200%">
+                                        <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#000000" floodOpacity="0.15" />
+                                    </filter>
+
+                                    {/* Glow effect for highest/lowest points */}
+                                    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+                                        <feDropShadow dx="0" dy="0" stdDeviation="4" floodColor="#fbbf24" floodOpacity="0.6" />
+                                    </filter>
                                 </defs>
 
-                                {/* Grid lines */}
-                                {[0, 1, 2, 3, 4].map(i => (
+                                {/* Enhanced grid lines */}
+                                {[0, 0.25, 0.5, 0.75, 1].map((ratio, index) => (
                                     <line
-                                        key={i}
-                                        x1="0"
-                                        y1={40 * i}
-                                        x2="300"
-                                        y2={40 * i}
-                                        stroke="#e9ecef"
-                                        strokeWidth="1"
+                                        key={index}
+                                        x1={padding}
+                                        y1={padding + (1 - ratio) * (chartHeight - 2 * padding)}
+                                        x2={chartWidth - padding}
+                                        y2={padding + (1 - ratio) * (chartHeight - 2 * padding)}
+                                        stroke={index === 0 || index === 4 ? "#dee2e6" : "#f1f3f4"}
+                                        strokeWidth={index === 0 || index === 4 ? "2" : "1"}
+                                        strokeDasharray={index === 0 || index === 4 ? "none" : "3,3"}
+                                        opacity={index === 0 || index === 4 ? 1 : 0.7}
                                     />
                                 ))}
 
+                                {/* Average line */}
+                                <line
+                                    x1={padding}
+                                    y1={chartHeight - padding - ((average - minValue) / range) * (chartHeight - 2 * padding)}
+                                    x2={chartWidth - padding}
+                                    y2={chartHeight - padding - ((average - minValue) / range) * (chartHeight - 2 * padding)}
+                                    stroke="#8b5cf6"
+                                    strokeWidth="2"
+                                    strokeDasharray="5,5"
+                                    opacity="0.7"
+                                />
+
+                                {/* Area fill */}
                                 {validData.length > 1 && (
                                     <polygon
-                                        points={`0,180 ${pathPoints} 300,180`}
-                                        fill="url(#gradient)"
+                                        points={`${padding},${chartHeight - padding} ${pathPoints} ${chartWidth - padding},${chartHeight - padding}`}
+                                        fill="url(#areaGradient)"
                                     />
                                 )}
 
+                                {/* Main trend line */}
                                 {validData.length > 1 && (
                                     <polyline
                                         points={pathPoints}
                                         fill="none"
-                                        stroke="#007bff"
-                                        strokeWidth="3"
+                                        stroke="#4f46e5"
+                                        strokeWidth="4"
                                         strokeLinecap="round"
                                         strokeLinejoin="round"
+                                        style={{ filter: 'url(#dropshadow)' }}
                                     />
                                 )}
 
+                                {/* Enhanced data points */}
                                 {points.map((point, index) => (
                                     <g key={index}>
+                                        {/* Point glow for highest/lowest */}
+                                        {(point.isHighest || point.isLowest) && (
+                                            <circle
+                                                cx={point.x}
+                                                cy={point.y}
+                                                r="12"
+                                                fill={point.isHighest ? "#10b981" : "#ef4444"}
+                                                opacity="0.2"
+                                            />
+                                        )}
+
+                                        {/* Main point */}
                                         <circle
                                             cx={point.x}
                                             cy={point.y}
-                                            r="4"
-                                            fill="#007bff"
+                                            r={point.isHighest || point.isLowest ? "8" : "6"}
+                                            fill={point.isHighest ? "#10b981" : point.isLowest ? "#ef4444" : "#4f46e5"}
                                             stroke="white"
-                                            strokeWidth="2"
-                                            style={{ cursor: 'pointer' }}
+                                            strokeWidth="3"
+                                            style={{
+                                                cursor: 'pointer',
+                                                filter: point.isHighest || point.isLowest ? 'url(#glow)' : 'url(#dropshadow)'
+                                            }}
                                         />
-                                        {/* Value labels on points */}
-                                        <text
-                                            x={point.x}
-                                            y={point.y - 10}
-                                            textAnchor="middle"
-                                            fontSize="10"
-                                            fill="#495057"
-                                            fontWeight="bold"
-                                        >
-                                            ₱{(point.sales / 1000).toFixed(0)}k
-                                        </text>
+
+                                        {/* Enhanced value labels */}
+                                        <g>
+                                            {/* Label background */}
+                                            <rect
+                                                x={point.x - 25}
+                                                y={point.y - 35}
+                                                width="50"
+                                                height="20"
+                                                rx="10"
+                                                fill="white"
+                                                stroke={point.isHighest ? "#10b981" : point.isLowest ? "#ef4444" : "#4f46e5"}
+                                                strokeWidth="1.5"
+                                                opacity="0.95"
+                                                style={{ filter: 'drop-shadow(0px 2px 4px rgba(0, 0, 0, 0.1))' }}
+                                            />
+
+                                            {/* Label text */}
+                                            <text
+                                                x={point.x}
+                                                y={point.y - 25}
+                                                textAnchor="middle"
+                                                fontSize="11"
+                                                fill={point.isHighest ? "#10b981" : point.isLowest ? "#ef4444" : "#4f46e5"}
+                                                fontWeight="700"
+                                                dominantBaseline="middle"
+                                            >
+                                                ₱{(point.sales / 1000).toFixed(0)}K
+                                            </text>
+
+                                            {/* Special indicators for highest/lowest */}
+                                            {point.isHighest && (
+                                                <text
+                                                    x={point.x}
+                                                    y={point.y + 20}
+                                                    textAnchor="middle"
+                                                    fontSize="10"
+                                                    fill="#10b981"
+                                                    fontWeight="600"
+                                                >
+                                                    ↑ HIGH
+                                                </text>
+                                            )}
+                                            {point.isLowest && (
+                                                <text
+                                                    x={point.x}
+                                                    y={point.y + 20}
+                                                    textAnchor="middle"
+                                                    fontSize="10"
+                                                    fill="#ef4444"
+                                                    fontWeight="600"
+                                                >
+                                                    ↓ LOW
+                                                </text>
+                                            )}
+                                        </g>
                                     </g>
                                 ))}
+
+                                {/* Average line label */}
+                                <g>
+                                    <rect
+                                        x={chartWidth - 80}
+                                        y={chartHeight - padding - ((average - minValue) / range) * (chartHeight - 2 * padding) - 10}
+                                        width="60"
+                                        height="16"
+                                        rx="8"
+                                        fill="#8b5cf6"
+                                        opacity="0.9"
+                                    />
+                                    <text
+                                        x={chartWidth - 50}
+                                        y={chartHeight - padding - ((average - minValue) / range) * (chartHeight - 2 * padding) - 2}
+                                        textAnchor="middle"
+                                        fontSize="10"
+                                        fill="white"
+                                        fontWeight="600"
+                                    >
+                                        AVG
+                                    </text>
+                                </g>
                             </svg>
 
-                            <div className="d-flex justify-content-between" style={{ marginTop: '10px', paddingLeft: '10px', paddingRight: '10px' }}>
+                            {/* Enhanced X-axis labels */}
+                            <div style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                marginTop: '16px',
+                                paddingLeft: `${padding}px`,
+                                paddingRight: `${padding}px`,
+                                paddingTop: '12px',
+                                borderTop: '2px solid #e9ecef'
+                            }}>
                                 {validData.map((item, index) => (
-                                    <small key={index} style={{ color: '#6c757d', fontWeight: 'bold' }}>{item.day}</small>
+                                    <div key={index} style={{
+                                        textAlign: 'center',
+                                        position: 'relative'
+                                    }}>
+                                        <div style={{
+                                            color: '#495057',
+                                            fontWeight: '600',
+                                            fontSize: '13px',
+                                            marginBottom: '4px'
+                                        }}>
+                                            {item.day}
+                                        </div>
+                                        <div style={{
+                                            color: '#6c757d',
+                                            fontSize: '10px',
+                                            fontWeight: '400'
+                                        }}>
+                                            {((item.sales / total) * 100).toFixed(1)}%
+                                        </div>
+                                        {/* Indicator line */}
+                                        <div style={{
+                                            position: 'absolute',
+                                            top: '-16px',
+                                            left: '50%',
+                                            transform: 'translateX(-50%)',
+                                            width: '2px',
+                                            height: '8px',
+                                            backgroundColor: '#dee2e6'
+                                        }}></div>
+                                    </div>
                                 ))}
                             </div>
                         </div>
                     </div>
 
-                    {/* Enhanced Legend */}
-                    <div style={{ marginTop: '15px', padding: '10px', backgroundColor: '#f8f9fa', borderRadius: '5px' }}>
+                    {/* Enhanced Statistics and Legend */}
+                    <div style={{
+                        padding: '24px',
+                        backgroundColor: '#f8f9fa',
+                        borderRadius: '12px',
+                        border: '1px solid #e9ecef'
+                    }}>
                         <div className="row">
-                            <div className="col-md-8">
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                        <div style={{
-                                            width: '20px',
-                                            height: '3px',
-                                            backgroundColor: '#007bff',
-                                            borderRadius: '2px'
-                                        }}></div>
-                                        <small style={{ color: '#495057' }}>Sales Trend</small>
+                            <div className="col-md-12">
+                                <div style={{ marginBottom: '20px' }}>
+                                    <h6 style={{
+                                        color: '#495057',
+                                        fontWeight: '600',
+                                        fontSize: '14px',
+                                        margin: 0,
+                                        marginBottom: '16px'
+                                    }}>
+                                        Chart Legend & Analysis
+                                    </h6>
+
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '16px', marginBottom: '16px' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <div style={{
+                                                width: '24px',
+                                                height: '4px',
+                                                background: 'linear-gradient(90deg, #4f46e5 0%, rgba(79, 70, 229, 0.3) 100%)'
+                                            }}></div>
+                                            <span style={{ fontSize: '12px', color: '#495057', fontWeight: '500' }}>
+                                                Revenue Trend
+                                            </span>
+                                        </div>
+
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <div style={{
+                                                width: '12px',
+                                                height: '12px',
+                                                backgroundColor: '#4f46e5',
+                                                borderRadius: '50%',
+                                                border: '2px solid white',
+                                                boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
+                                            }}></div>
+                                            <span style={{ fontSize: '12px', color: '#495057', fontWeight: '500' }}>
+                                                Data Points
+                                            </span>
+                                        </div>
+
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <div style={{
+                                                width: '20px',
+                                                height: '2px',
+                                                backgroundColor: '#8b5cf6',
+                                                opacity: 0.7
+                                            }}></div>
+                                            <span style={{ fontSize: '12px', color: '#495057', fontWeight: '500' }}>
+                                                Average Line
+                                            </span>
+                                        </div>
+
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <div style={{ display: 'flex', gap: '4px' }}>
+                                                <div style={{
+                                                    width: '8px',
+                                                    height: '8px',
+                                                    backgroundColor: '#10b981',
+                                                    borderRadius: '50%'
+                                                }}></div>
+                                                <div style={{
+                                                    width: '8px',
+                                                    height: '8px',
+                                                    backgroundColor: '#ef4444',
+                                                    borderRadius: '50%'
+                                                }}></div>
+                                            </div>
+                                            <span style={{ fontSize: '12px', color: '#495057', fontWeight: '500' }}>
+                                                High/Low Points
+                                            </span>
+                                        </div>
                                     </div>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+
+                                    <div style={{
+                                        display: 'grid',
+                                        gridTemplateColumns: 'repeat(2, 1fr)',
+                                        gap: '12px'
+                                    }}>
                                         <div style={{
-                                            width: '8px',
-                                            height: '8px',
-                                            backgroundColor: '#007bff',
-                                            borderRadius: '50%',
-                                            border: '2px solid white'
-                                        }}></div>
-                                        <small style={{ color: '#495057' }}>Data Points</small>
+                                            textAlign: 'center',
+                                            padding: '12px',
+                                            backgroundColor: 'white',
+                                            borderRadius: '8px',
+                                            border: '1px solid #dee2e6',
+                                            width: '100%'
+                                        }}>
+                                            <div style={{ fontSize: '16px', fontWeight: '700', color: '#10b981', marginBottom: '4px' }}>
+                                                ₱{(maxValue / 1000).toFixed(0)}K
+                                            </div>
+                                            <div style={{ fontSize: '10px', color: '#6c757d', fontWeight: '500' }}>
+                                                Peak Performance
+                                            </div>
+                                        </div>
+
+                                        <div style={{
+                                            textAlign: 'center',
+                                            padding: '12px',
+                                            backgroundColor: 'white',
+                                            borderRadius: '8px',
+                                            border: '1px solid #dee2e6',
+                                            width: '100%'
+                                        }}>
+                                            <div style={{ fontSize: '16px', fontWeight: '700', color: '#ef4444', marginBottom: '4px' }}>
+                                                ₱{(minValue / 1000).toFixed(0)}K
+                                            </div>
+                                            <div style={{ fontSize: '10px', color: '#6c757d', fontWeight: '500' }}>
+                                                Lowest Point
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                            <div className="col-md-4">
-                                <small style={{ color: '#495057', fontWeight: 'bold' }}>
-                                    Total: ₱{validData.reduce((sum, item) => sum + item.sales, 0).toLocaleString()}
-                                </small>
                             </div>
                         </div>
                     </div>
@@ -583,6 +1388,35 @@ const DashboardAdmin = ({ onNavigateToSales }) => {
         const minValue = Math.min(...salesValues);
         const range = maxValue - minValue || 1;
 
+        // Calculate overview statistics
+        // Find current month index
+        const currentMonthIndex = validData.findIndex(item => item.isCurrentMonth);
+        const ytdData = currentMonthIndex >= 0 ? validData.slice(0, currentMonthIndex + 1) : validData;
+
+        const totalSales = ytdData.reduce((sum, item) => sum + item.sales, 0);
+        const averageSales = totalSales / ytdData.length;
+        const bestMonth = validData.find(item => item.sales === maxValue);
+        const worstMonth = validData.find(item => item.sales === minValue);
+
+        // Calculate growth trend (if we have at least 2 data points)
+        let growthTrend = 0;
+        let trendDirection = 'stable';
+        if (validData.length >= 2) {
+            const firstHalf = validData.slice(0, Math.ceil(validData.length / 2));
+            const secondHalf = validData.slice(Math.floor(validData.length / 2));
+            const firstHalfAvg = firstHalf.reduce((sum, item) => sum + item.sales, 0) / firstHalf.length;
+            const secondHalfAvg = secondHalf.reduce((sum, item) => sum + item.sales, 0) / secondHalf.length;
+
+            growthTrend = ((secondHalfAvg - firstHalfAvg) / firstHalfAvg) * 100;
+            if (Math.abs(growthTrend) < 5) {
+                trendDirection = 'stable';
+            } else if (growthTrend > 0) {
+                trendDirection = 'increasing';
+            } else {
+                trendDirection = 'decreasing';
+            }
+        }
+
         const points = validData.map((item, index) => {
             const x = validData.length > 1 ? (index / (validData.length - 1)) * 350 : 175;
             const y = 180 - ((item.sales - minValue) / range) * 160;
@@ -603,11 +1437,11 @@ const DashboardAdmin = ({ onNavigateToSales }) => {
 
                     <div style={{ display: 'flex' }}>
                         {/* Y-axis labels */}
-                        <div style={{ width: '60px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', paddingRight: '10px', height: '200px' }}>
+                        <div style={{ width: '70px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', paddingRight: '10px', height: '200px' }}>
                             <small style={{ color: '#6c757d', fontSize: '10px' }}>₱{maxValue.toLocaleString()}</small>
-                            <small style={{ color: '#6c757d', fontSize: '10px' }}>₱{(minValue + range * 0.75).toFixed(0).toLocaleString()}</small>
-                            <small style={{ color: '#6c757d', fontSize: '10px' }}>₱{(minValue + range * 0.5).toFixed(0).toLocaleString()}</small>
-                            <small style={{ color: '#6c757d', fontSize: '10px' }}>₱{(minValue + range * 0.25).toFixed(0).toLocaleString()}</small>
+                            <small style={{ color: '#6c757d', fontSize: '10px' }}>₱{(minValue + range * 0.75).toLocaleString()}</small>
+                            <small style={{ color: '#6c757d', fontSize: '10px' }}>₱{(minValue + range * 0.5).toLocaleString()}</small>
+                            <small style={{ color: '#6c757d', fontSize: '10px' }}>₱{(minValue + range * 0.25).toLocaleString()}</small>
                             <small style={{ color: '#6c757d', fontSize: '10px' }}>₱{minValue.toLocaleString()}</small>
                         </div>
 
@@ -721,10 +1555,98 @@ const DashboardAdmin = ({ onNavigateToSales }) => {
                             </div>
                             <div className="col-md-6">
                                 <small style={{ color: '#495057', fontWeight: 'bold' }}>
-                                    YTD Total: ₱{validData.reduce((sum, item) => sum + item.sales, 0).toLocaleString()}
+                                    YTD Total: ₱{totalSales.toLocaleString()}
                                 </small>
                             </div>
                         </div>
+                    </div>
+
+                    {/* New Overview Section */}
+                    <div style={{ marginTop: '20px', borderTop: '1px solid #dee2e6', paddingTop: '15px' }}>
+                        <h6 style={{ color: '#495057', marginBottom: '15px', fontWeight: '600' }}>Performance Overview</h6>
+
+                        <div className="row">
+                            {/* Key Metrics */}
+                            <div className="col-md-6 mb-3">
+                                <div style={{ padding: '15px', backgroundColor: '#fff', border: '1px solid #dee2e6', borderRadius: '8px' }}>
+                                    <h6 style={{ color: '#6c757d', fontSize: '12px', textTransform: 'uppercase', marginBottom: '10px', letterSpacing: '0.5px' }}>
+                                        Key Metrics
+                                    </h6>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                                        <div>
+                                            <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#28a745' }}>
+                                                ₱{(averageSales / 1000).toFixed(0)}k
+                                            </div>
+                                            <div style={{ fontSize: '11px', color: '#6c757d' }}>Monthly Average</div>
+                                        </div>
+                                        <div>
+                                            <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#007bff' }}>
+                                                {ytdData.length}
+                                            </div>
+                                            <div style={{ fontSize: '11px', color: '#6c757d' }}>Months Tracked (YTD)</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Performance Highlights */}
+                            <div className="col-md-6 mb-3">
+                                <div style={{ padding: '15px', backgroundColor: '#fff', border: '1px solid #dee2e6', borderRadius: '8px' }}>
+                                    <h6 style={{ color: '#6c757d', fontSize: '12px', textTransform: 'uppercase', marginBottom: '10px', letterSpacing: '0.5px' }}>
+                                        Performance Highlights
+                                    </h6>
+                                    <div style={{ fontSize: '11px', lineHeight: '1.4', color: '#495057' }}>
+                                        <div style={{ marginBottom: '5px' }}>
+                                            <strong style={{ color: '#28a745' }}>Best:</strong> {bestMonth?.month} (₱{(bestMonth?.sales / 1000).toFixed(0)}k)
+                                        </div>
+                                        <div>
+                                            <strong style={{ color: '#dc3545' }}>Lowest:</strong> {worstMonth?.month} (₱{(worstMonth?.sales / 1000).toFixed(0)}k)
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Trend Analysis */}
+                        {/* <div style={{ padding: '15px', backgroundColor: '#f8f9fa', borderRadius: '8px', marginTop: '10px' }}>
+                            <div className="row align-items-center">
+                                <div className="col-md-8">
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                        <div style={{
+                                            width: '8px',
+                                            height: '8px',
+                                            borderRadius: '50%',
+                                            backgroundColor:
+                                                trendDirection === 'increasing' ? '#28a745' :
+                                                    trendDirection === 'decreasing' ? '#dc3545' : '#ffc107'
+                                        }}></div>
+                                        <small style={{ color: '#495057', fontWeight: '500' }}>
+                                            Trend Analysis:
+                                            <span style={{
+                                                color:
+                                                    trendDirection === 'increasing' ? '#28a745' :
+                                                        trendDirection === 'decreasing' ? '#dc3545' : '#856404',
+                                                fontWeight: 'bold',
+                                                marginLeft: '5px'
+                                            }}>
+                                                {trendDirection === 'increasing' ? '↗️ Growing' :
+                                                    trendDirection === 'decreasing' ? '↘️ Declining' : '→ Stable'}
+                                            </span>
+                                            {validData.length >= 2 && Math.abs(growthTrend) >= 5 && (
+                                                <span style={{ marginLeft: '5px', color: '#6c757d' }}>
+                                                    ({growthTrend > 0 ? '+' : ''}{growthTrend.toFixed(1)}%)
+                                                </span>
+                                            )}
+                                        </small>
+                                    </div>
+                                </div>
+                                <div className="col-md-4 text-right">
+                                    <small style={{ color: '#6c757d', fontSize: '10px' }}>
+                                        Range: ₱{((maxValue - minValue) / 1000).toFixed(0)}k variation
+                                    </small>
+                                </div>
+                            </div>
+                        </div> */}
                     </div>
                 </div>
             </div>
@@ -771,6 +1693,53 @@ const DashboardAdmin = ({ onNavigateToSales }) => {
         const minValue = Math.min(...salesValues);
         const range = maxValue - minValue || 1;
 
+        // Calculate overview statistics
+        const totalSales = validData.reduce((sum, item) => sum + item.sales, 0);
+        const averageSales = totalSales / validData.length;
+        const bestYear = validData.find(item => item.sales === maxValue);
+        const worstYear = validData.find(item => item.sales === minValue);
+
+        // Calculate CAGR (Compound Annual Growth Rate) if we have at least 2 years
+        let cagr = 0;
+        let cagr_years = 0;
+        if (validData.length >= 2) {
+            const firstYear = validData[0];
+            const lastYear = validData[validData.length - 1];
+            cagr_years = parseInt(lastYear.year) - parseInt(firstYear.year);
+            if (cagr_years > 0 && firstYear.sales > 0) {
+                cagr = (Math.pow(lastYear.sales / firstYear.sales, 1 / cagr_years) - 1) * 100;
+            }
+        }
+
+        // Calculate year-over-year growth rates
+        const yoyGrowthRates = [];
+        for (let i = 1; i < validData.length; i++) {
+            const currentYear = validData[i];
+            const previousYear = validData[i - 1];
+            if (previousYear.sales > 0) {
+                const growthRate = ((currentYear.sales - previousYear.sales) / previousYear.sales) * 100;
+                yoyGrowthRates.push({
+                    year: currentYear.year,
+                    growth: growthRate
+                });
+            }
+        }
+
+        // Determine overall trend
+        let overallTrend = 'stable';
+        if (yoyGrowthRates.length > 0) {
+            const avgGrowth = yoyGrowthRates.reduce((sum, item) => sum + item.growth, 0) / yoyGrowthRates.length;
+            if (avgGrowth > 5) {
+                overallTrend = 'strong growth';
+            } else if (avgGrowth > 0) {
+                overallTrend = 'moderate growth';
+            } else if (avgGrowth > -5) {
+                overallTrend = 'stable';
+            } else {
+                overallTrend = 'declining';
+            }
+        }
+
         const points = validData.map((item, index) => {
             const x = validData.length > 1 ? (index / (validData.length - 1)) * 300 : 150;
             const y = 180 - ((item.sales - minValue) / range) * 160;
@@ -786,132 +1755,447 @@ const DashboardAdmin = ({ onNavigateToSales }) => {
 
         return (
             <div className="card shadow" style={{ marginBottom: '20px' }}>
-                <div className="card-body">
-                    <h5 className="card-title">{title}</h5>
+                <div className="card-body" style={{ padding: '24px' }}>
+                    <h5 className="card-title" style={{ marginBottom: '24px', fontSize: '18px', fontWeight: '600' }}>
+                        {title}
+                    </h5>
 
-                    <div style={{ display: 'flex' }}>
-                        {/* Y-axis labels */}
-                        <div style={{ width: '60px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', paddingRight: '10px', height: '200px' }}>
-                            <small style={{ color: '#6c757d', fontSize: '10px' }}>₱{maxValue.toLocaleString()}</small>
-                            <small style={{ color: '#6c757d', fontSize: '10px' }}>₱{(minValue + range * 0.75).toFixed(0).toLocaleString()}</small>
-                            <small style={{ color: '#6c757d', fontSize: '10px' }}>₱{(minValue + range * 0.5).toFixed(0).toLocaleString()}</small>
-                            <small style={{ color: '#6c757d', fontSize: '10px' }}>₱{(minValue + range * 0.25).toFixed(0).toLocaleString()}</small>
-                            <small style={{ color: '#6c757d', fontSize: '10px' }}>₱{minValue.toLocaleString()}</small>
+                    <div style={{ display: 'flex', gap: '16px' }}>
+                        {/* Enhanced Y-axis labels with better spacing */}
+                        <div style={{
+                            width: '80px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            justifyContent: 'space-between',
+                            paddingRight: '12px',
+                            height: '240px',
+                            paddingTop: '8px',
+                            paddingBottom: '8px'
+                        }}>
+                            <div style={{
+                                color: '#495057',
+                                fontSize: '11px',
+                                fontWeight: '500',
+                                textAlign: 'right',
+                                lineHeight: '1'
+                            }}>
+                                ₱{(maxValue / 1000000).toFixed(1)}M
+                            </div>
+                            <div style={{
+                                color: '#6c757d',
+                                fontSize: '11px',
+                                fontWeight: '400',
+                                textAlign: 'right',
+                                lineHeight: '1'
+                            }}>
+                                ₱{((minValue + range * 0.75) / 1000000).toFixed(1)}M
+                            </div>
+                            <div style={{
+                                color: '#6c757d',
+                                fontSize: '11px',
+                                fontWeight: '400',
+                                textAlign: 'right',
+                                lineHeight: '1'
+                            }}>
+                                ₱{((minValue + range * 0.5) / 1000000).toFixed(1)}M
+                            </div>
+                            <div style={{
+                                color: '#6c757d',
+                                fontSize: '11px',
+                                fontWeight: '400',
+                                textAlign: 'right',
+                                lineHeight: '1'
+                            }}>
+                                ₱{((minValue + range * 0.25) / 1000000).toFixed(1)}M
+                            </div>
+                            <div style={{
+                                color: '#495057',
+                                fontSize: '11px',
+                                fontWeight: '500',
+                                textAlign: 'right',
+                                lineHeight: '1'
+                            }}>
+                                ₱{(minValue / 1000000).toFixed(1)}M
+                            </div>
                         </div>
 
+                        {/* Enhanced chart area */}
                         <div style={{ textAlign: 'center', flex: 1 }}>
-                            <svg width="330" height="200">
+                            <svg width="360" height="240" style={{ overflow: 'visible' }}>
                                 <defs>
+                                    {/* Enhanced gradient with better colors */}
                                     <linearGradient id="yearlyGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                                        <stop offset="0%" style={{ stopColor: '#6f42c1', stopOpacity: 0.3 }} />
-                                        <stop offset="100%" style={{ stopColor: '#6f42c1', stopOpacity: 0.05 }} />
+                                        <stop offset="0%" style={{ stopColor: '#4f46e5', stopOpacity: 0.2 }} />
+                                        <stop offset="100%" style={{ stopColor: '#4f46e5', stopOpacity: 0.02 }} />
                                     </linearGradient>
+
+                                    {/* Drop shadow for points */}
+                                    <filter id="dropshadow" x="-50%" y="-50%" width="200%" height="200%">
+                                        <feDropShadow dx="0" dy="2" stdDeviation="2" floodColor="#000000" floodOpacity="0.1" />
+                                    </filter>
                                 </defs>
 
-                                {/* Grid lines */}
+                                {/* Enhanced grid lines with alternating opacity */}
                                 {[0, 1, 2, 3, 4].map(i => (
                                     <line
                                         key={i}
                                         x1="0"
-                                        y1={i * 40}
-                                        x2="300"
-                                        y2={i * 40}
-                                        stroke="#e9ecef"
-                                        strokeWidth="1"
+                                        y1={8 + i * 48}
+                                        x2="330"
+                                        y2={8 + i * 48}
+                                        stroke={i === 0 || i === 4 ? "#dee2e6" : "#f1f3f4"}
+                                        strokeWidth={i === 0 || i === 4 ? "1.5" : "1"}
+                                        strokeDasharray={i === 0 || i === 4 ? "none" : "2,2"}
                                     />
                                 ))}
 
+                                {/* Area fill with enhanced gradient */}
                                 {validData.length > 1 && (
                                     <polygon
-                                        points={`0,180 ${pathPoints} 300,180`}
+                                        points={`0,200 ${pathPoints} 330,200`}
                                         fill="url(#yearlyGradient)"
                                     />
                                 )}
 
+                                {/* Main line with enhanced styling */}
                                 {validData.length > 1 && (
                                     <polyline
                                         points={pathPoints}
                                         fill="none"
-                                        stroke="#6f42c1"
-                                        strokeWidth="4"
+                                        stroke="#4f46e5"
+                                        strokeWidth="3"
                                         strokeLinecap="round"
                                         strokeLinejoin="round"
+                                        style={{
+                                            filter: 'drop-shadow(0px 1px 2px rgba(0, 0, 0, 0.1))'
+                                        }}
                                     />
                                 )}
 
+                                {/* Enhanced data points with better visibility */}
                                 {points.map((point, index) => (
                                     <g key={index}>
+                                        {/* Point shadow/glow effect */}
                                         <circle
                                             cx={point.x}
                                             cy={point.y}
-                                            r={point.isCurrentYear ? "8" : "6"}
-                                            fill={point.isCurrentYear ? "#ffc107" : "#6f42c1"}
-                                            stroke="white"
-                                            strokeWidth="3"
-                                            style={{ cursor: 'pointer' }}
+                                            r={point.isCurrentYear ? "10" : "8"}
+                                            fill={point.isCurrentYear ? "#fbbf24" : "#4f46e5"}
+                                            opacity="0.2"
                                         />
-                                        {/* Value labels */}
-                                        <text
-                                            x={point.x}
-                                            y={point.y - 15}
-                                            textAnchor="middle"
-                                            fontSize="10"
-                                            fill={point.isCurrentYear ? "#ffc107" : "#6f42c1"}
-                                            fontWeight="bold"
-                                        >
-                                            ₱{(point.sales / 1000000).toFixed(1)}M
-                                        </text>
+
+                                        {/* Main point */}
+                                        <circle
+                                            cx={point.x}
+                                            cy={point.y}
+                                            r={point.isCurrentYear ? "7" : "5"}
+                                            fill={point.isCurrentYear ? "#f59e0b" : "#4f46e5"}
+                                            stroke="white"
+                                            strokeWidth="2.5"
+                                            style={{
+                                                cursor: 'pointer',
+                                                filter: 'url(#dropshadow)'
+                                            }}
+                                        />
+
+                                        {/* Enhanced value labels with background */}
+                                        <g>
+                                            {/* Label background */}
+                                            <rect
+                                                x={point.x - 20}
+                                                y={point.y - 30}
+                                                width="40"
+                                                height="16"
+                                                rx="8"
+                                                fill="white"
+                                                stroke={point.isCurrentYear ? "#f59e0b" : "#4f46e5"}
+                                                strokeWidth="1"
+                                                opacity="0.95"
+                                                style={{ filter: 'drop-shadow(0px 1px 3px rgba(0, 0, 0, 0.1))' }}
+                                            />
+
+                                            {/* Label text */}
+                                            <text
+                                                x={point.x}
+                                                y={point.y - 20}
+                                                textAnchor="middle"
+                                                fontSize="11"
+                                                fill={point.isCurrentYear ? "#f59e0b" : "#4f46e5"}
+                                                fontWeight="600"
+                                                dominantBaseline="middle"
+                                            >
+                                                ₱{(point.sales / 1000000).toFixed(1)}M
+                                            </text>
+                                        </g>
                                     </g>
                                 ))}
                             </svg>
 
-                            <div className="d-flex justify-content-between" style={{ marginTop: '10px', paddingLeft: '15px', paddingRight: '15px' }}>
+                            {/* Enhanced X-axis labels */}
+                            <div
+                                className="d-flex justify-content-between"
+                                style={{
+                                    marginTop: '16px',
+                                    paddingLeft: '15px',
+                                    paddingRight: '15px',
+                                    borderTop: '1px solid #e9ecef',
+                                    paddingTop: '12px'
+                                }}
+                            >
                                 {validData.map((item, index) => (
-                                    <small
+                                    <div
                                         key={index}
                                         style={{
-                                            color: item.isCurrentYear ? '#ffc107' : '#6c757d',
-                                            fontWeight: item.isCurrentYear ? 'bold' : 'normal'
+                                            color: item.isCurrentYear ? '#f59e0b' : '#6c757d',
+                                            fontWeight: item.isCurrentYear ? '600' : '500',
+                                            fontSize: '12px',
+                                            textAlign: 'center'
                                         }}
                                     >
-                                        {item.year || 'N/A'}
-                                    </small>
+                                        <div>{item.year || 'N/A'}</div>
+                                        {item.isCurrentYear && (
+                                            <div style={{
+                                                fontSize: '10px',
+                                                color: '#f59e0b',
+                                                fontWeight: '400',
+                                                marginTop: '2px'
+                                            }}>
+                                                Current
+                                            </div>
+                                        )}
+                                    </div>
                                 ))}
                             </div>
                         </div>
                     </div>
 
-                    {/* Enhanced Legend */}
-                    <div style={{ marginTop: '15px', padding: '10px', backgroundColor: '#f8f9fa', borderRadius: '5px' }}>
-                        <div className="row">
-                            <div className="col-md-6">
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    {/* Enhanced Legend and Stats */}
+                    <div style={{
+                        marginTop: '20px',
+                        padding: '16px',
+                        backgroundColor: '#f8f9fa',
+                        borderRadius: '8px',
+                        border: '1px solid #e9ecef'
+                    }}>
+                        <div className="row align-items-center">
+                            <div className="col-md-8">
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '24px', flexWrap: 'wrap' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                         <div style={{
-                                            width: '12px',
-                                            height: '12px',
-                                            backgroundColor: '#ffc107',
-                                            borderRadius: '50%'
+                                            width: '14px',
+                                            height: '14px',
+                                            backgroundColor: '#f59e0b',
+                                            borderRadius: '50%',
+                                            border: '2px solid white',
+                                            boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
                                         }}></div>
-                                        <small style={{ color: '#6c757d' }}>Current Year</small>
+                                        <span style={{
+                                            color: '#495057',
+                                            fontSize: '12px',
+                                            fontWeight: '500'
+                                        }}>
+                                            Current Year
+                                        </span>
                                     </div>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                         <div style={{
-                                            width: '12px',
-                                            height: '12px',
-                                            backgroundColor: '#6f42c1',
-                                            borderRadius: '50%'
+                                            width: '14px',
+                                            height: '14px',
+                                            backgroundColor: '#4f46e5',
+                                            borderRadius: '50%',
+                                            border: '2px solid white',
+                                            boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
                                         }}></div>
-                                        <small style={{ color: '#6c757d' }}>Historical Years</small>
+                                        <span style={{
+                                            color: '#495057',
+                                            fontSize: '12px',
+                                            fontWeight: '500'
+                                        }}>
+                                            Historical Data
+                                        </span>
+                                    </div>
+
+                                    {validData.length > 1 && (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <div style={{
+                                                width: '20px',
+                                                height: '3px',
+                                                background: 'linear-gradient(90deg, #4f46e5 0%, rgba(79, 70, 229, 0.2) 100%)'
+                                            }}></div>
+                                            <span style={{
+                                                color: '#495057',
+                                                fontSize: '12px',
+                                                fontWeight: '500'
+                                            }}>
+                                                Trend Line
+                                            </span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="col-md-4" style={{ textAlign: 'right' }}>
+                                {validData.length > 1 && (
+                                    <div style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '8px',
+                                        padding: '6px 12px',
+                                        backgroundColor: 'white',
+                                        borderRadius: '6px',
+                                        border: '1px solid #dee2e6'
+                                    }}>
+                                        <span style={{
+                                            color: '#6c757d',
+                                            fontSize: '11px',
+                                            fontWeight: '500'
+                                        }}>
+                                            YoY Growth:
+                                        </span>
+                                        <span style={{
+                                            color: ((validData[validData.length - 1].sales - validData[validData.length - 2].sales) / validData[validData.length - 2].sales * 100) >= 0 ? '#10b981' : '#ef4444',
+                                            fontSize: '13px',
+                                            fontWeight: '600'
+                                        }}>
+                                            {((validData[validData.length - 1].sales - validData[validData.length - 2].sales) / validData[validData.length - 2].sales * 100) >= 0 ? '+' : ''}
+                                            {((validData[validData.length - 1].sales - validData[validData.length - 2].sales) / validData[validData.length - 2].sales * 100).toFixed(1)}%
+                                        </span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* New Comprehensive Overview Section */}
+                    <div style={{ marginTop: '24px', borderTop: '1px solid #dee2e6', paddingTop: '20px' }}>
+                        <h6 style={{ color: '#495057', marginBottom: '20px', fontWeight: '600', fontSize: '16px' }}>
+                            Annual Performance Overview
+                        </h6>
+
+                        <div className="row">
+                            {/* Key Financial Metrics */}
+                            <div className="col-md-4 mb-3">
+                                <div style={{
+                                    padding: '20px',
+                                    backgroundColor: '#fff',
+                                    border: '1px solid #dee2e6',
+                                    borderRadius: '12px',
+                                    boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+                                }}>
+                                    <h6 style={{
+                                        color: '#6c757d',
+                                        fontSize: '12px',
+                                        textTransform: 'uppercase',
+                                        marginBottom: '15px',
+                                        letterSpacing: '0.5px',
+                                        fontWeight: '600'
+                                    }}>
+                                        Key Metrics
+                                    </h6>
+                                    <div style={{ display: 'grid', gap: '12px' }}>
+                                        <div>
+                                            <div style={{ fontSize: '24px', fontWeight: '700', color: '#4f46e5', lineHeight: '1.2' }}>
+                                                ₱{(totalSales / 1000000).toFixed(1)}M
+                                            </div>
+                                            <div style={{ fontSize: '11px', color: '#6c757d', marginTop: '2px' }}>Total Revenue</div>
+                                        </div>
+                                        <div>
+                                            <div style={{ fontSize: '20px', fontWeight: '600', color: '#10b981', lineHeight: '1.2' }}>
+                                                ₱{(averageSales / 1000000).toFixed(1)}M
+                                            </div>
+                                            <div style={{ fontSize: '11px', color: '#6c757d', marginTop: '2px' }}>Annual Average</div>
+                                        </div>
+                                        <div>
+                                            <div style={{ fontSize: '18px', fontWeight: '600', color: '#f59e0b', lineHeight: '1.2' }}>
+                                                {validData.length} {validData.length === 1 ? 'Year' : 'Years'}
+                                            </div>
+                                            <div style={{ fontSize: '11px', color: '#6c757d', marginTop: '2px' }}>Data Period</div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                            <div className="col-md-6">
-                                <small style={{ color: '#495057', fontWeight: 'bold' }}>
-                                    Growth: {validData.length > 1 ?
-                                        ((validData[validData.length - 1].sales - validData[validData.length - 2].sales) / validData[validData.length - 2].sales * 100).toFixed(1) + '%'
-                                        : 'N/A'}
-                                </small>
+
+                            {/* Performance Highlights */}
+                            <div className="col-md-4 mb-3">
+                                <div style={{
+                                    padding: '20px',
+                                    backgroundColor: '#fff',
+                                    border: '1px solid #dee2e6',
+                                    borderRadius: '12px',
+                                    boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+                                }}>
+                                    <h6 style={{
+                                        color: '#6c757d',
+                                        fontSize: '12px',
+                                        textTransform: 'uppercase',
+                                        marginBottom: '15px',
+                                        letterSpacing: '0.5px',
+                                        fontWeight: '600'
+                                    }}>
+                                        Performance Highlights
+                                    </h6>
+                                    <div style={{ fontSize: '12px', lineHeight: '1.5', color: '#495057' }}>
+                                        <div style={{ marginBottom: '12px', padding: '8px', backgroundColor: '#f0fdf4', borderRadius: '6px', border: '1px solid #bbf7d0' }}>
+                                            <div style={{ fontWeight: '600', color: '#16a34a', marginBottom: '2px' }}>🏆 Best Year</div>
+                                            <div>{bestYear?.year}: ₱{(bestYear?.sales / 1000000).toFixed(1)}M</div>
+                                        </div>
+                                        <div style={{ marginBottom: '12px', padding: '8px', backgroundColor: '#fef2f2', borderRadius: '6px', border: '1px solid #fecaca' }}>
+                                            <div style={{ fontWeight: '600', color: '#dc2626', marginBottom: '2px' }}>📉 Lowest Year</div>
+                                            <div>{worstYear?.year}: ₱{(worstYear?.sales / 1000000).toFixed(1)}M</div>
+                                        </div>
+                                        <div style={{ padding: '8px', backgroundColor: '#fffbeb', borderRadius: '6px', border: '1px solid #fed7aa' }}>
+                                            <div style={{ fontWeight: '600', color: '#d97706', marginBottom: '2px' }}>📊 Range</div>
+                                            <div>₱{((maxValue - minValue) / 1000000).toFixed(1)}M variation</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Growth Analysis */}
+                            <div className="col-md-4 mb-3">
+                                <div style={{
+                                    padding: '20px',
+                                    backgroundColor: '#fff',
+                                    border: '1px solid #dee2e6',
+                                    borderRadius: '12px',
+                                    boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+                                }}>
+                                    <h6 style={{
+                                        color: '#6c757d',
+                                        fontSize: '12px',
+                                        textTransform: 'uppercase',
+                                        marginBottom: '15px',
+                                        letterSpacing: '0.5px',
+                                        fontWeight: '600'
+                                    }}>
+                                        Recent YoY Changes:
+                                    </h6>
+                                    <div style={{ display: 'grid', gap: '12px' }}>
+                                        {yoyGrowthRates.length > 0 && (
+                                            <div>
+
+                                                <div style={{ fontSize: '11px', lineHeight: '1.4' }}>
+                                                    {yoyGrowthRates.slice(-3).map((item, index) => (
+                                                        <div key={index} style={{
+                                                            display: 'flex',
+                                                            justifyContent: 'space-between',
+                                                            marginBottom: '2px'
+                                                        }}>
+                                                            <span style={{ color: '#6c757d' }}>{item.year}:</span>
+                                                            <span style={{
+                                                                color: item.growth >= 0 ? '#16a34a' : '#dc2626',
+                                                                fontWeight: '500'
+                                                            }}>
+                                                                {item.growth >= 0 ? '+' : ''}{item.growth.toFixed(1)}%
+                                                            </span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1004,7 +2288,11 @@ const DashboardAdmin = ({ onNavigateToSales }) => {
                                     textAlign: 'center'
                                 }}>
                                     <div style={{ fontSize: '12px', color: '#6c757d', fontWeight: 'bold' }}>Total</div>
-                                    <div style={{ fontSize: '14px', color: '#495057', fontWeight: 'bold' }}>₱{total.toLocaleString()}</div>
+                                    <div style={{ fontSize: '14px', color: '#495057', fontWeight: 'bold' }}>
+                                        ₱{total >= 1000000
+                                            ? (total / 1000000).toFixed(1) + 'M'
+                                            : (total / 1000).toFixed(0) + 'k'}
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -1031,7 +2319,9 @@ const DashboardAdmin = ({ onNavigateToSales }) => {
                                                 {slice.percentage.toFixed(1)}%
                                             </div>
                                             <div style={{ fontSize: '12px', color: '#495057', fontWeight: 'bold' }}>
-                                                ₱{(slice.value / 1000).toFixed(0)}k
+                                                ₱{slice.value >= 1000000
+                                                    ? (slice.value / 1000000).toFixed(1) + 'M'
+                                                    : (slice.value / 1000).toFixed(0) + 'k'}
                                             </div>
                                         </div>
                                     </div>
@@ -1041,7 +2331,11 @@ const DashboardAdmin = ({ onNavigateToSales }) => {
                             {/* Summary */}
                             <div style={{ marginTop: '10px', padding: '8px', backgroundColor: '#e9ecef', borderRadius: '4px' }}>
                                 <small style={{ color: '#495057' }}>
-                                    <strong>Locations:</strong> {slices.length} | <strong>Avg:</strong> ₱{(total / slices.length).toFixed(0).toLocaleString()}
+                                    <strong>Locations:</strong> {slices.length} | <strong>Avg:</strong> ₱{
+                                        (total / slices.length) >= 1000000
+                                            ? ((total / slices.length) / 1000000).toFixed(1) + 'M'
+                                            : ((total / slices.length) / 1000).toFixed(0) + 'k'
+                                    }
                                 </small>
                             </div>
                         </div>
@@ -1050,74 +2344,346 @@ const DashboardAdmin = ({ onNavigateToSales }) => {
             </div>
         );
     };
+    const currentMonthYear = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+
+
+
+
+
+
+
 
     // Enhanced Recent Sales Table Component
     const RecentSalesTable = ({ salesData, title }) => {
         const recentSales = salesData.slice(-10).reverse();
+        const totalAmount = recentSales.reduce((sum, sale) => sum + (parseFloat(sale.amount) || 0), 0);
+        const averageAmount = recentSales.length > 0 ? totalAmount / recentSales.length : 0;
+        const todaySales = recentSales.filter(sale =>
+            new Date(sale.date).toDateString() === new Date().toDateString()
+        );
+
+        // Get unique locations and transaction types for stats
+        const uniqueLocations = [...new Set(recentSales.map(sale => sale.location_name).filter(Boolean))];
+        const uniqueTransactionTypes = [...new Set(recentSales.map(sale => sale.sales_from).filter(Boolean))];
+
+        const getTransactionTypeColor = (type) => {
+            const colors = {
+                'POS': '#3b82f6',
+                'Online': '#10b981',
+                'Mobile': '#f59e0b',
+                'Walk-in': '#8b5cf6',
+                'Delivery': '#ef4444'
+            };
+            return colors[type] || '#6c757d';
+        };
+
+        const getAmountColor = (amount) => {
+            if (amount >= averageAmount * 1.5) return '#10b981'; // High value - Green
+            if (amount >= averageAmount) return '#3b82f6'; // Above average - Blue
+            if (amount >= averageAmount * 0.5) return '#f59e0b'; // Below average - Orange
+            return '#ef4444'; // Low value - Red
+        };
 
         return (
-            <div className="card shadow" style={{ marginBottom: '20px' }}>
-                <div className="card-body">
-                    <div className="d-flex justify-content-between align-items-center mb-3">
-                        <h5 className="card-title mb-0">{title}</h5>
-                        <small className="text-muted">Last 10 transactions</small>
+            <div className="card shadow" style={{ marginBottom: '20px', minHeight: '600px' }}>
+                <div className="card-body" style={{ padding: '24px', display: 'flex', flexDirection: 'column', height: '100%' }}>
+                    {/* Enhanced Header */}
+                    <div style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'flex-start',
+                        marginBottom: '24px',
+                        paddingBottom: '16px',
+                        borderBottom: '2px solid #e9ecef'
+                    }}>
+                        <div>
+                            <h5 className="card-title" style={{
+                                fontSize: '18px',
+                                fontWeight: '600',
+                                margin: 0,
+                                marginBottom: '4px',
+                                color: '#495057'
+                            }}>
+                                {title}
+                            </h5>
+                            <p style={{
+                                color: '#6c757d',
+                                fontSize: '14px',
+                                margin: 0,
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px'
+                            }}>
+                                <span>Last 10 transactions</span>
+                                {todaySales.length > 0 && (
+                                    <span style={{
+                                        backgroundColor: '#ffc107',
+                                        color: '#000',
+                                        padding: '2px 8px',
+                                        borderRadius: '12px',
+                                        fontSize: '11px',
+                                        fontWeight: '600'
+                                    }}>
+                                        {todaySales.length} today
+                                    </span>
+                                )}
+                            </p>
+                        </div>
+
+                        {/* Quick Stats Cards */}
+                        <div style={{ display: 'flex', gap: '12px' }}>
+                            <div style={{
+                                backgroundColor: '#f8f9fa',
+                                padding: '12px 16px',
+                                borderRadius: '8px',
+                                textAlign: 'center',
+                                border: '1px solid #e9ecef',
+                                minWidth: '100px'
+                            }}>
+                                <div style={{ fontSize: '18px', fontWeight: '700', color: '#10b981', lineHeight: '1' }}>
+                                    ₱{(totalAmount / 1000000).toFixed(1)}M
+                                </div>
+                                <div style={{ fontSize: '10px', color: '#6c757d', fontWeight: '500', marginTop: '2px' }}>
+                                    Total Value
+                                </div>
+                            </div>
+
+                            <div style={{
+                                backgroundColor: '#f8f9fa',
+                                padding: '12px 16px',
+                                borderRadius: '8px',
+                                textAlign: 'center',
+                                border: '1px solid #e9ecef',
+                                minWidth: '100px'
+                            }}>
+                                <div style={{ fontSize: '18px', fontWeight: '700', color: '#3b82f6', lineHeight: '1' }}>
+                                    ₱{(averageAmount / 1000).toFixed(0)}K
+                                </div>
+                                <div style={{ fontSize: '10px', color: '#6c757d', fontWeight: '500', marginTop: '2px' }}>
+                                    Average
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
-                    <div className="table-responsive" style={{ maxHeight: '400px', overflowY: 'auto' }}>
-                        <table className="table table-hover table-sm">
-                            <thead className="thead-light" style={{ position: 'sticky', top: 0, backgroundColor: '#f8f9fa', zIndex: 10 }}>
+                    {/* Enhanced Table */}
+                    <div
+                        className="table-responsive"
+                        style={{
+                            flex: 1,
+                            maxHeight: '450px',
+                            overflowY: 'auto',
+                            border: '1px solid #e9ecef',
+                            borderRadius: '8px'
+                        }}
+                    >
+                        <table className="table table-hover mb-0" style={{ fontSize: '13px' }}>
+                            <thead style={{
+                                position: 'sticky',
+                                top: 0,
+                                backgroundColor: '#f8f9fa',
+                                zIndex: 10,
+                                borderBottom: '2px solid #dee2e6'
+                            }}>
                                 <tr>
-                                    <th style={{ border: 'none', padding: '12px 8px', fontSize: '13px', fontWeight: '600' }}>Date</th>
-                                    <th style={{ border: 'none', padding: '12px 8px', fontSize: '13px', fontWeight: '600' }}>Location</th>
-                                    <th style={{ border: 'none', padding: '12px 8px', fontSize: '13px', fontWeight: '600' }}>Transaction Type</th>
-                                    <th style={{ border: 'none', padding: '12px 8px', fontSize: '13px', fontWeight: '600', textAlign: 'right' }}>Amount</th>
-                                    <th style={{ border: 'none', padding: '12px 8px', fontSize: '13px', fontWeight: '600', textAlign: 'center' }}>Status</th>
+                                    <th style={{
+                                        border: 'none',
+                                        padding: '16px 12px',
+                                        fontSize: '12px',
+                                        fontWeight: '700',
+                                        color: '#495057',
+                                        textTransform: 'uppercase',
+                                        letterSpacing: '0.5px'
+                                    }}>
+                                        Date & Time
+                                    </th>
+                                    <th style={{
+                                        border: 'none',
+                                        padding: '16px 12px',
+                                        fontSize: '12px',
+                                        fontWeight: '700',
+                                        color: '#495057',
+                                        textTransform: 'uppercase',
+                                        letterSpacing: '0.5px'
+                                    }}>
+                                        Location
+                                    </th>
+                                    <th style={{
+                                        border: 'none',
+                                        padding: '16px 12px',
+                                        fontSize: '12px',
+                                        fontWeight: '700',
+                                        color: '#495057',
+                                        textTransform: 'uppercase',
+                                        letterSpacing: '0.5px'
+                                    }}>
+                                        Type
+                                    </th>
+                                    <th style={{
+                                        border: 'none',
+                                        padding: '16px 12px',
+                                        fontSize: '12px',
+                                        fontWeight: '700',
+                                        color: '#495057',
+                                        textAlign: 'right',
+                                        textTransform: 'uppercase',
+                                        letterSpacing: '0.5px'
+                                    }}>
+                                        Amount
+                                    </th>
+                                    <th style={{
+                                        border: 'none',
+                                        padding: '16px 12px',
+                                        fontSize: '12px',
+                                        fontWeight: '700',
+                                        color: '#495057',
+                                        textAlign: 'center',
+                                        textTransform: 'uppercase',
+                                        letterSpacing: '0.5px'
+                                    }}>
+                                        Status
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {recentSales.map((sale, index) => {
                                     const isToday = new Date(sale.date).toDateString() === new Date().toDateString();
+                                    const saleAmount = parseFloat(sale.amount) || 0;
+                                    const amountColor = getAmountColor(saleAmount);
+                                    const transactionColor = getTransactionTypeColor(sale.sales_from);
+
                                     return (
-                                        <tr key={index} style={{
-                                            backgroundColor: isToday ? '#fff3cd' : (index % 2 === 0 ? '#f8f9fa' : 'white'),
-                                            borderLeft: isToday ? '3px solid #ffc107' : 'none'
-                                        }}>
-                                            <td style={{ padding: '10px 8px', fontSize: '12px', border: 'none' }}>
-                                                <div style={{ fontWeight: '500', color: '#495057' }}>
-                                                    {new Date(sale.date).toLocaleDateString()}
+                                        <tr
+                                            key={index}
+                                            style={{
+                                                backgroundColor: isToday ? '#fff3cd' : (index % 2 === 0 ? '#f8f9fa' : 'white'),
+                                                borderLeft: isToday ? '4px solid #ffc107' : 'none',
+                                                transition: 'all 0.2s ease'
+                                            }}
+                                            onMouseEnter={(e) => {
+                                                if (!isToday) {
+                                                    e.currentTarget.style.backgroundColor = '#e3f2fd';
+                                                }
+                                            }}
+                                            onMouseLeave={(e) => {
+                                                if (!isToday) {
+                                                    e.currentTarget.style.backgroundColor = index % 2 === 0 ? '#f8f9fa' : 'white';
+                                                }
+                                            }}
+                                        >
+                                            <td style={{ padding: '16px 12px', border: 'none', borderBottom: '1px solid #f1f3f4' }}>
+                                                <div style={{ fontWeight: '600', color: '#495057', marginBottom: '4px' }}>
+                                                    {new Date(sale.date).toLocaleDateString('en-US', {
+                                                        month: 'short',
+                                                        day: 'numeric'
+                                                    })}
+                                                    {isToday && (
+                                                        <span style={{
+                                                            marginLeft: '8px',
+                                                            backgroundColor: '#ffc107',
+                                                            color: '#000',
+                                                            padding: '1px 6px',
+                                                            borderRadius: '8px',
+                                                            fontSize: '9px',
+                                                            fontWeight: '700'
+                                                        }}>
+                                                            TODAY
+                                                        </span>
+                                                    )}
                                                 </div>
-                                                <div style={{ fontSize: '11px', color: '#6c757d' }}>
-                                                    {new Date(sale.date).toLocaleDateString('en-US', { weekday: 'short' })}
+                                                <div style={{
+                                                    fontSize: '11px',
+                                                    color: '#6c757d',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '4px'
+                                                }}>
+                                                    <span>{new Date(sale.date).toLocaleDateString('en-US', { weekday: 'short' })}</span>
+                                                    <span style={{ color: '#dee2e6' }}>•</span>
+                                                    <span>{new Date(sale.date).toLocaleTimeString('en-US', {
+                                                        hour: '2-digit',
+                                                        minute: '2-digit'
+                                                    })}</span>
                                                 </div>
                                             </td>
-                                            <td style={{ padding: '10px 8px', fontSize: '12px', border: 'none' }}>
-                                                <div style={{ fontWeight: '500', color: '#495057' }}>
-                                                    {sale.location_name || 'Unknown'}
+
+                                            <td style={{ padding: '16px 12px', border: 'none', borderBottom: '1px solid #f1f3f4' }}>
+                                                <div style={{
+                                                    fontWeight: '600',
+                                                    color: '#495057',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '8px'
+                                                }}>
+                                                    <div style={{
+                                                        width: '8px',
+                                                        height: '8px',
+                                                        backgroundColor: '#10b981',
+                                                        borderRadius: '50%'
+                                                    }}></div>
+                                                    {sale.location_name || 'Unknown Location'}
                                                 </div>
                                             </td>
-                                             <td style={{ padding: '10px 8px', fontSize: '12px', border: 'none' }}>
-                                                <div style={{ fontWeight: '500', color: '#495057' }}>
+
+                                            <td style={{ padding: '16px 12px', border: 'none', borderBottom: '1px solid #f1f3f4' }}>
+                                                <span style={{
+                                                    textAlign: 'center',
+                                                    backgroundColor: `${transactionColor}15`,
+                                                    // color: transactionColor,
+                                                    // padding: '4px 12px',
+                                                    // borderRadius: '16px',
+                                                    fontSize: '11px',
+                                                    fontWeight: '600',
+                                                    // border: `1px solid ${transactionColor}30`
+                                                }}>
                                                     {sale.sales_from || 'Unknown'}
+                                                </span>
+
+
+                                            </td>
+
+                                            <td style={{
+                                                padding: '16px 12px',
+                                                border: 'none',
+                                                borderBottom: '1px solid #f1f3f4',
+                                                textAlign: 'right'
+                                            }}>
+                                                <div style={{
+                                                    fontWeight: '700',
+                                                    color: amountColor,
+                                                    fontSize: '14px',
+                                                    marginBottom: '2px'
+                                                }}>
+                                                    ₱{saleAmount.toLocaleString()}
+                                                </div>
+                                                <div style={{
+                                                    fontSize: '10px',
+                                                    color: '#6c757d'
+                                                }}>
+                                                    {((saleAmount / totalAmount) * 100).toFixed(1)}% of total
                                                 </div>
                                             </td>
-                                            <td style={{ padding: '10px 8px', fontSize: '12px', border: 'none', textAlign: 'right' }}>
-                                                <div style={{ fontWeight: 'bold', color: '#28a745', fontSize: '13px' }}>
-                                                    ₱{(parseFloat(sale.amount) || 0).toLocaleString()}
-                                                </div>
-                                            </td>
-                                            <td style={{ padding: '10px 8px', fontSize: '12px', border: 'none', textAlign: 'center' }}>
-                                                <span
-                                                    className="badge"
-                                                    style={{
+
+                                            <td style={{
+                                                padding: '16px 12px',
+                                                border: 'none',
+                                                borderBottom: '1px solid #f1f3f4',
+                                                textAlign: 'center'
+                                            }}>
+                                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                                                    <span style={{
                                                         backgroundColor: '#d4edda',
                                                         color: '#155724',
                                                         fontSize: '10px',
-                                                        padding: '4px 8px',
-                                                        borderRadius: '12px'
-                                                    }}
-                                                >
-                                                    Completed
-                                                </span>
+                                                        padding: '4px 10px',
+                                                        borderRadius: '12px',
+                                                        fontWeight: '600',
+                                                        border: '1px solid #c3e6cb'
+                                                    }}>
+                                                        ✓ Completed
+                                                    </span>
+                                                </div>
                                             </td>
                                         </tr>
                                     );
@@ -1126,18 +2692,128 @@ const DashboardAdmin = ({ onNavigateToSales }) => {
                         </table>
                     </div>
 
-                    {/* Sales Summary */}
-                    <div style={{ marginTop: '15px', padding: '10px', backgroundColor: '#f8f9fa', borderRadius: '5px' }}>
+                    {/* Enhanced Summary Section */}
+                    <div style={{
+                        marginTop: '20px',
+                        padding: '20px',
+                        backgroundColor: '#f8f9fa',
+                        borderRadius: '12px',
+                        border: '1px solid #e9ecef'
+                    }}>
                         <div className="row">
-                            <div className="col-md-6">
-                                <small style={{ color: '#495057', fontWeight: 'bold' }}>
-                                    Recent Total: ₱{recentSales.reduce((sum, sale) => sum + (parseFloat(sale.amount) || 0), 0).toLocaleString()}
-                                </small>
+                            <div className="col-md-8">
+                                <div style={{ marginBottom: '16px' }}>
+                                    <h6 style={{
+                                        color: '#495057',
+                                        fontWeight: '600',
+                                        fontSize: '14px',
+                                        margin: 0,
+                                        marginBottom: '12px'
+                                    }}>
+                                        Transaction Insights
+                                    </h6>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px' }}>
+                                        <div style={{
+                                            textAlign: 'center',
+                                            padding: '12px',
+                                            backgroundColor: 'white',
+                                            borderRadius: '8px',
+                                            border: '1px solid #dee2e6'
+                                        }}>
+                                            <div style={{ fontSize: '16px', fontWeight: '700', color: '#10b981', marginBottom: '4px' }}>
+                                                ₱{Math.max(...recentSales.map(s => parseFloat(s.amount) || 0)).toLocaleString()}
+                                            </div>
+                                            <div style={{ fontSize: '10px', color: '#6c757d', fontWeight: '500' }}>
+                                                Highest Transaction
+                                            </div>
+                                        </div>
+
+                                        <div style={{
+                                            textAlign: 'center',
+                                            padding: '12px',
+                                            backgroundColor: 'white',
+                                            borderRadius: '8px',
+                                            border: '1px solid #dee2e6'
+                                        }}>
+                                            <div style={{ fontSize: '16px', fontWeight: '700', color: '#ef4444', marginBottom: '4px' }}>
+                                                ₱{Math.min(...recentSales.map(s => parseFloat(s.amount) || 0)).toLocaleString()}
+                                            </div>
+                                            <div style={{ fontSize: '10px', color: '#6c757d', fontWeight: '500' }}>
+                                                Lowest Transaction
+                                            </div>
+                                        </div>
+
+                                        <div style={{
+                                            textAlign: 'center',
+                                            padding: '12px',
+                                            backgroundColor: 'white',
+                                            borderRadius: '8px',
+                                            border: '1px solid #dee2e6'
+                                        }}>
+                                            <div style={{ fontSize: '16px', fontWeight: '700', color: '#3b82f6', marginBottom: '4px' }}>
+                                                {uniqueLocations.length}
+                                            </div>
+                                            <div style={{ fontSize: '10px', color: '#6c757d', fontWeight: '500' }}>
+                                                Active Locations
+                                            </div>
+                                        </div>
+
+                                        <div style={{
+                                            textAlign: 'center',
+                                            padding: '12px',
+                                            backgroundColor: 'white',
+                                            borderRadius: '8px',
+                                            border: '1px solid #dee2e6'
+                                        }}>
+                                            <div style={{ fontSize: '16px', fontWeight: '700', color: '#f59e0b', marginBottom: '4px' }}>
+                                                {uniqueTransactionTypes.length}
+                                            </div>
+                                            <div style={{ fontSize: '10px', color: '#6c757d', fontWeight: '500' }}>
+                                                Payment Methods
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
-                            <div className="col-md-6">
-                                <small style={{ color: '#495057' }}>
-                                    Average: ₱{recentSales.length > 0 ? (recentSales.reduce((sum, sale) => sum + (parseFloat(sale.amount) || 0), 0) / recentSales.length).toLocaleString() : '0'}
-                                </small>
+
+                            <div className="col-md-4">
+                                <div style={{
+                                    height: '100%',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    justifyContent: 'center',
+                                    padding: '16px',
+                                    backgroundColor: 'white',
+                                    borderRadius: '8px',
+                                    border: '2px solid #e9ecef',
+                                    textAlign: 'center'
+                                }}>
+                                    <div style={{ fontSize: '12px', color: '#6c757d', marginBottom: '8px', fontWeight: '600' }}>
+                                        PERFORMANCE SUMMARY
+                                    </div>
+                                    <div style={{ fontSize: '20px', fontWeight: '700', color: '#495057', marginBottom: '8px' }}>
+                                        {recentSales.length}/10
+                                    </div>
+                                    <div style={{ fontSize: '11px', color: '#6c757d', marginBottom: '12px' }}>
+                                        Recent Transactions
+                                    </div>
+
+                                    {todaySales.length > 0 && (
+                                        <div style={{
+                                            backgroundColor: '#fff3cd',
+                                            padding: '8px 12px',
+                                            borderRadius: '8px',
+                                            border: '1px solid #ffc107'
+                                        }}>
+                                            <div style={{ fontSize: '14px', fontWeight: '600', color: '#856404' }}>
+                                                ₱{todaySales.reduce((sum, sale) => sum + (parseFloat(sale.amount) || 0), 0).toLocaleString()}
+                                            </div>
+                                            <div style={{ fontSize: '10px', color: '#856404' }}>
+                                                Today's Sales
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1227,6 +2903,41 @@ const DashboardAdmin = ({ onNavigateToSales }) => {
             name,
             value,
             percentage: (value / Object.values(locationSales).reduce((a, b) => a + b, 0)) * 100
+        }));
+
+    // Add this BEFORE the return statement (around line 1234)
+
+    // Prepare monthly sales by location data
+    const getMonthlySalesByLocation = (salesData) => {
+        const today = new Date();
+        const currentMonth = today.getMonth();
+        const currentYear = today.getFullYear();
+
+        // Filter sales for current month
+        const monthlyData = salesData.filter(sale => {
+            const saleDate = new Date(sale.date);
+            return saleDate.getMonth() === currentMonth && saleDate.getFullYear() === currentYear;
+        });
+
+        // Group by location
+        const locationSales = {};
+        monthlyData.forEach(sale => {
+            const locationName = sale.location_name || 'Unknown Location';
+            if (!locationSales[locationName]) {
+                locationSales[locationName] = 0;
+            }
+            locationSales[locationName] += parseFloat(sale.amount || 0);
+        });
+
+        return locationSales;
+    };
+
+    const monthlyLocationSales = getMonthlySalesByLocation(salesByInvoice);
+    const monthlyLocationData = Object.entries(monthlyLocationSales)
+        .filter(([name, value]) => !isNaN(value) && value > 0)
+        .map(([name, value]) => ({
+            name,
+            value
         }));
 
     return (
@@ -1414,10 +3125,21 @@ const DashboardAdmin = ({ onNavigateToSales }) => {
                         {/* Monthly & Yearly Charts */}
                         <div className="row mb-4">
                             <div className="col-md-6">
-                                <MonthlyLineChart data={monthlyTrendData} title="Monthly Performance (Current Year)" />
+                                <MonthlyLineChart
+                                    data={monthlyTrendData}
+                                    title={`Monthly Performance (${new Date().getFullYear()})`}
+                                />
                             </div>
                             <div className="col-md-6">
-                                <YearlyChart data={yearlyTrendData} title="Yearly Performance Trend" />
+                                {locationData.length > 0 && (
+                                    <SimplePieChart data={locationData} title="Total Sales by Location" />
+                                )}
+                                {monthlyLocationData.length > 0 && (
+                                    <SimplePieChart
+                                        data={monthlyLocationData}
+                                        title={`${currentMonthYear} Sales by Location`}
+                                    />
+                                )}
                             </div>
                         </div>
 
@@ -1427,9 +3149,8 @@ const DashboardAdmin = ({ onNavigateToSales }) => {
                                 <LineChart data={weeklyTrendData} title="Weekly Sales Trend" />
                             </div>
                             <div className="col-md-6">
-                                {locationData.length > 0 && (
-                                    <SimplePieChart data={locationData} title="Sales by Location" />
-                                )}
+                                <YearlyChart data={yearlyTrendData} title="Yearly Performance Trend" />
+
                             </div>
                         </div>
 
@@ -1443,6 +3164,411 @@ const DashboardAdmin = ({ onNavigateToSales }) => {
                             </div>
                         </div>
                     </>
+                )}
+
+                {/* Summary section */}
+                <div style={{
+                    background: 'white',
+                    borderRadius: '12px',
+                    padding: '24px',
+                    boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+                    marginTop: '20px',
+                    marginBottom: '40px'
+                }}>
+                    <h2 style={{
+                        color: '#333',
+                        marginBottom: '20px',
+                        fontSize: '1.5em'
+                    }}>
+                        Collection Summary
+                    </h2>
+                    <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+                        gap: '20px'
+                    }}>
+                        <div style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            padding: '16px',
+                            background: '#f8f9fa',
+                            borderRadius: '8px',
+                            borderLeft: '4px solid #62f436ff'
+                        }}>
+                            <span style={{ fontWeight: '500', color: '#666' }}>
+                                Total Due Today:
+                            </span>
+                            <span style={{
+                                fontSize: '1.3em',
+                                fontWeight: 'bold',
+                                color: '#39f436ff',
+                                animation: 'blink 2s infinite'
+                            }}>
+                                {counts.dailyCollection}
+                            </span>
+                        </div>
+                        <div style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            padding: '16px',
+                            background: '#f8f9fa',
+                            borderRadius: '8px',
+                            borderLeft: '4px solid #FF5722'
+                        }}>
+                            <span style={{ fontWeight: '500', color: '#666' }}>
+                                Total Due This Week:
+                            </span>
+                            <span style={{
+                                fontSize: '1.3em',
+                                fontWeight: 'bold',
+                                color: '#39f436ff'
+                            }}>
+                                {counts.weeklyCollection}
+                            </span>
+                        </div>
+                        <div style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            padding: '16px',
+                            background: '#f8f9fa',
+                            borderRadius: '8px',
+                            borderLeft: '4px solid #795548'
+                        }}>
+                            <span style={{ fontWeight: '500', color: '#666' }}>
+                                Total Due This Month:
+                            </span>
+                            <span style={{
+                                fontSize: '1.3em',
+                                fontWeight: 'bold',
+                                color: '#39f436ff'
+                            }}>
+                                {counts.monthlyCollection}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Collection Insights */}
+                <div className="row mb-4">
+                    <div className="col-md-8">
+                        <div className="card shadow">
+                            <div className="card-body">
+                                <h5>Collection Summary & Insights</h5>
+                                <div className="row">
+                                    <div className="col-md-4">
+                                        <div style={{ padding: '16px', background: '#f8f9fa', borderRadius: '8px' }}>
+                                            <span>Total Due Today:</span>
+                                            <h4 style={{ color: '#46f436ff' }}>{counts.dailyCollection}</h4>
+                                        </div>
+                                    </div>
+                                    <div className="col-md-4">
+                                        <div style={{ padding: '16px', background: '#f8f9fa', borderRadius: '8px' }}>
+                                            <span>Total Due This Week:</span>
+                                            <h4 style={{ color: '#46f436ff' }}>{counts.weeklyCollection}</h4>
+                                        </div>
+                                    </div>
+                                    <div className="col-md-4">
+                                        <div style={{ padding: '16px', background: '#f8f9fa', borderRadius: '8px' }}>
+                                            <span>Total Due This Month:</span>
+                                            <h4 style={{ color: '#46f436ff' }}>{counts.monthlyCollection}</h4>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Insights */}
+                                <div style={{ marginTop: '20px', padding: '16px', background: '#f8fafc', borderRadius: '8px' }}>
+                                    <h6>Collection Insights</h6>
+                                    <p>Priority Focus: {parseInt(counts.dailyDueCustomers) > 10 ? 'High daily collection volume' : 'Manageable daily collections'}</p>
+                                    <p>Customer Coverage: {Math.round((parseInt(counts.totalCustomersWithDue) / parseInt(counts.customerCount)) * 100)}% of customers have dues</p>
+                                    <p>Recommendation: {overdueCustomers.length > 0 ? 'Address overdue accounts first' : 'Focus on timely collections'}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="col-md-4">
+                        <div className="card shadow">
+                            <div className="card-body">
+                                <h6>Customer Due Status</h6>
+                                <div style={{ padding: '12px', background: '#f0fff4', borderRadius: '6px', marginBottom: '10px' }}>
+                                    <span>Total Customers with Dues</span>
+                                    <h4 style={{ color: '#46f436ff' }}>{counts.totalCustomersWithDue}</h4>
+                                </div>
+                                {overdueCustomers.length > 0 && (
+                                    <div style={{ padding: '12px', background: '#ffebee', borderRadius: '6px' }}>
+                                        <span>Overdue Payments Count</span>
+                                        <h4 style={{ color: '#E91E63' }}>{overdueCustomers.length}</h4>
+                                        <small style={{ color: '#E91E63' }}>Total Overdue: {counts.overdueAmount}</small>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Overdue Customers Board */}
+                {overdueCustomers.length > 0 && (
+                    <div style={{
+                        background: 'white',
+                        borderRadius: '12px',
+                        padding: '24px',
+                        boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+                        marginTop: '20px',
+                        borderTop: '4px solid #E91E63'
+                    }}>
+                        <h2 style={{
+                            color: '#E91E63',
+                            marginBottom: '20px',
+                            fontSize: '1.5em',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px'
+                        }}>
+                            🚨 Overdue Customers ({overdueCustomers.length})
+                        </h2>
+
+                        {/* Grace Period Info Box */}
+                        <div style={{
+                            marginBottom: '15px',
+                            padding: '16px',
+                            background: 'linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%)',
+                            borderRadius: '8px',
+                            borderLeft: '4px solid #4CAF50',
+                            marginBottom: '12px'
+                        }}>
+                            <div style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                marginBottom: '8px'
+                            }}>
+                                <span style={{ fontSize: '1.2em' }}>ℹ️</span>
+                                <strong style={{ color: '#2e7d32', fontSize: '1.05em' }}>
+                                    Grace Period Policy
+                                </strong>
+                            </div>
+                            <div style={{ fontSize: '0.9em', color: '#1b5e20', lineHeight: '1.6' }}>
+                                Customers have a <strong>3-day grace period</strong> after the due date with <strong>no penalty</strong>.
+                                <br />
+                                A <strong>5% penalty</strong> will be applied starting on the 4th day after the due date.
+                            </div>
+                        </div>
+
+                        {/* Total Overdue Amount */}
+                        <div style={{
+                            marginBottom: '15px',
+                            padding: '12px',
+                            background: '#ffebee',
+                            borderRadius: '8px',
+                            borderLeft: '4px solid #E91E63'
+                        }}>
+                            <strong style={{ color: '#E91E63' }}>
+                                Total Overdue Amount: {counts.overdueAmount}
+                            </strong>
+                        </div>
+
+                        {/* Overdue Customers Table */}
+                        <div style={{
+                            maxHeight: '400px',
+                            overflowY: 'auto',
+                            border: '1px solid #ddd',
+                            borderRadius: '8px'
+                        }}>
+                            <table style={{
+                                width: '100%',
+                                borderCollapse: 'collapse',
+                                fontSize: '0.9em'
+                            }}>
+                                <thead>
+                                    <tr style={{ backgroundColor: '#f8f9fa' }}>
+                                        <th style={{
+                                            padding: '12px',
+                                            textAlign: 'left',
+                                            borderBottom: '2px solid #ddd',
+                                            color: '#666',
+                                            fontWeight: '600'
+                                        }}>
+                                            Customer Name
+                                        </th>
+                                        <th style={{
+                                            padding: '12px',
+                                            textAlign: 'left',
+                                            borderBottom: '2px solid #ddd',
+                                            color: '#666',
+                                            fontWeight: '600'
+                                        }}>
+                                            Payment #
+                                        </th>
+                                        <th style={{
+                                            padding: '12px',
+                                            textAlign: 'left',
+                                            borderBottom: '2px solid #ddd',
+                                            color: '#666',
+                                            fontWeight: '600'
+                                        }}>
+                                            Due Date
+                                        </th>
+                                        <th style={{
+                                            padding: '12px',
+                                            textAlign: 'right',
+                                            borderBottom: '2px solid #ddd',
+                                            color: '#666',
+                                            fontWeight: '600'
+                                        }}>
+                                            Amount Due
+                                        </th>
+                                        <th style={{
+                                            padding: '12px',
+                                            textAlign: 'center',
+                                            borderBottom: '2px solid #ddd',
+                                            color: '#666',
+                                            fontWeight: '600'
+                                        }}>
+                                            Days Overdue
+                                        </th>
+                                        <th style={{
+                                            padding: '12px',
+                                            textAlign: 'center',
+                                            borderBottom: '2px solid #ddd',
+                                            color: '#666',
+                                            fontWeight: '600'
+                                        }}>
+                                            Status
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {overdueCustomers.slice(0, 10).map((customer, index) => (
+                                        <tr key={index} style={{
+                                            borderBottom: '1px solid #eee',
+                                            backgroundColor: customer.daysPastDue > 30 ? '#ffebee' :
+                                                customer.daysPastDue > 3 ? '#fff3e0' : '#e8f5e9',
+                                            cursor: 'pointer'
+                                        }}
+                                            onMouseEnter={(e) => {
+                                                e.currentTarget.style.backgroundColor = '#f5f5f5';
+                                            }}
+                                            onMouseLeave={(e) => {
+                                                e.currentTarget.style.backgroundColor =
+                                                    customer.daysPastDue > 30 ? '#ffebee' :
+                                                        customer.daysPastDue > 3 ? '#fff3e0' : '#e8f5e9';
+                                            }}
+                                        >
+                                            <td style={{
+                                                padding: '12px',
+                                                fontWeight: '500',
+                                                color: '#333'
+                                            }}>
+                                                {GetCustName(customer.cust_id)}
+                                            </td>
+                                            <td style={{
+                                                padding: '12px',
+                                                color: '#666'
+                                            }}>
+                                                Payment {customer.payment_number || 'N/A'}
+                                            </td>
+                                            <td style={{
+                                                padding: '12px',
+                                                color: '#666'
+                                            }}>
+                                                {new Date(customer.due_date).toLocaleDateString()}
+                                            </td>
+                                            <td style={{
+                                                padding: '12px',
+                                                textAlign: 'right'
+                                            }}>
+                                                <div style={{
+                                                    fontWeight: 'bold',
+                                                    color: customer.hasPenalty ? '#E91E63' : '#4CAF50'
+                                                }}>
+                                                    {new Intl.NumberFormat('en-PH', {
+                                                        style: 'currency',
+                                                        currency: 'PHP'
+                                                    }).format(customer.amountWithPenalty)}
+                                                </div>
+                                                {customer.hasPenalty ? (
+                                                    <div style={{
+                                                        fontSize: '0.75em',
+                                                        color: '#E91E63',
+                                                        fontWeight: 'normal'
+                                                    }}>
+                                                        +5% penalty applied
+                                                    </div>
+                                                ) : (
+                                                    <div style={{
+                                                        fontSize: '0.75em',
+                                                        color: '#2e7d32',
+                                                        fontWeight: 'bold',
+                                                        backgroundColor: '#c8e6c9',
+                                                        padding: '2px 6px',
+                                                        borderRadius: '4px',
+                                                        display: 'inline-block'
+                                                    }}>
+                                                        {customer.daysUntilPenalty} {customer.daysUntilPenalty === 1 ? 'day' : 'days'} left
+                                                    </div>
+                                                )}
+                                            </td>
+                                            <td style={{
+                                                padding: '12px',
+                                                textAlign: 'center',
+                                                fontWeight: 'bold',
+                                                color: customer.daysPastDue > 30 ? '#d32f2f' :
+                                                    customer.daysPastDue > 3 ? '#f57c00' : '#388e3c'
+                                            }}>
+                                                {customer.daysPastDue} days
+                                            </td>
+                                            <td style={{
+                                                padding: '12px',
+                                                textAlign: 'center'
+                                            }}>
+                                                <span style={{
+                                                    padding: '4px 8px',
+                                                    borderRadius: '12px',
+                                                    fontSize: '0.8em',
+                                                    fontWeight: 'bold',
+                                                    backgroundColor: customer.daysPastDue > 30 ? '#ffcdd2' :
+                                                        customer.daysPastDue > 3 ? '#fff3e0' : '#c8e6c9',
+                                                    color: customer.daysPastDue > 30 ? '#d32f2f' :
+                                                        customer.daysPastDue > 3 ? '#f57c00' : '#2e7d32'
+                                                }}>
+                                                    {customer.daysPastDue > 30 ? 'CRITICAL' :
+                                                        customer.daysPastDue > 3 ? 'OVERDUE' : 'GRACE PERIOD'}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+
+                            {overdueCustomers.length > 10 && (
+                                <div style={{
+                                    padding: '12px',
+                                    textAlign: 'center',
+                                    backgroundColor: '#f8f9fa',
+                                    borderTop: '1px solid #ddd',
+                                    color: '#666'
+                                }}>
+                                    Showing 10 of {overdueCustomers.length} overdue customers
+                                    <button style={{
+                                        marginLeft: '10px',
+                                        padding: '4px 12px',
+                                        border: '1px solid #E91E63',
+                                        backgroundColor: 'white',
+                                        color: '#E91E63',
+                                        borderRadius: '4px',
+                                        cursor: 'pointer',
+                                        fontSize: '0.8em'
+                                    }}
+                                        onClick={() => {/* Add view all functionality */ }}>
+                                        View All
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
                 )}
             </div>
         </div>

@@ -39,20 +39,24 @@ const Dashboard = () => {
 
         // Add more here if needed
     ];
-     const [mainSize, setMainSize] = useState('0');
-    
-        useEffect(() => {
-            const ua = navigator.userAgent;
-    
-            if (ua.includes("Edg")) {
-                // setMainSize('720px');
-            } else if (ua.includes("Chrome")) {
-                // setMainSize('680px');
-            }
-        }, []);
-    
+    const [mainSize, setMainSize] = useState('0');
 
     useEffect(() => {
+        const ua = navigator.userAgent;
+
+        if (ua.includes("Edg")) {
+            // setMainSize('720px');
+        } else if (ua.includes("Chrome")) {
+            // setMainSize('680px');
+        }
+    }, []);
+
+
+    useEffect(() => {
+        const user_id = sessionStorage.getItem("user_id");
+        if (!user_id) {
+            return;
+        }
         countConfigs.forEach(config => fetchCount(config));
     }, []);
 

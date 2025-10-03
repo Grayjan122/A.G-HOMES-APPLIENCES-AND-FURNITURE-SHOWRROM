@@ -33,6 +33,11 @@ const SidebarInventory = () => {
     setUser_id(sessionStorage.getItem('user_id'));
     document.title = 'Jan';
 
+    const user_id = sessionStorage.getItem("user_id");
+    if (!user_id) {
+      return;
+    }
+
     // const Toast = Swal.mixin({
     //   toast: true,
     //   position: "top-end",

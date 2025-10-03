@@ -53,7 +53,8 @@ const AdminPage = () => {
     setUser_ID(user_id);
 
     if (!user_id) {
-      router.push("/error");
+      // router.push('/Components/404/notFound');
+      router.push('/errorPage');
     }
   }, []);
 

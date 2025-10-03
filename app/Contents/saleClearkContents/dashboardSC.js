@@ -54,6 +54,10 @@ const DashboardSalesClerk = () => {
     const [customerList, setCustomerList] = useState([]);
 
     useEffect(() => {
+        const user_id = sessionStorage.getItem("user_id");
+        if (!user_id) {
+            return;
+        }
         GetCustomer();
         GetInstallment();
         countConfigs.forEach(config => fetchCount(config));
@@ -121,32 +125,37 @@ const DashboardSalesClerk = () => {
 
         const today = new Date();
         const todayStr = today.toISOString().split('T')[0];
+        const GRACE_PERIOD_DAYS = 3;
 
         const overdue = installments.filter(installment => {
             return installment.status === 'UNPAID' && installment.due_date < todayStr;
         }).map(installment => {
             const dueDate = new Date(installment.due_date);
             const daysPastDue = Math.floor((today - dueDate) / (1000 * 60 * 60 * 24));
+            const hasPenalty = daysPastDue > GRACE_PERIOD_DAYS;
+            const daysUntilPenalty = hasPenalty ? 0 : GRACE_PERIOD_DAYS - daysPastDue;
+            const baseAmount = parseFloat(installment.amount_due) || 0;
+            const amountWithPenalty = hasPenalty ? baseAmount * 1.05 : baseAmount;
 
             return {
                 ...installment,
-                daysPastDue
+                daysPastDue,
+                hasPenalty,
+                daysUntilPenalty,
+                baseAmount,
+                amountWithPenalty
             };
-        }).sort((a, b) => b.daysPastDue - a.daysPastDue); // Sort by most overdue first
+        }).sort((a, b) => b.daysPastDue - a.daysPastDue);
 
         setOverdueCustomers(overdue);
 
-        // Calculate total overdue amount
         const totalOverdue = overdue.reduce((sum, customer) => {
-            return sum + (parseFloat(customer.amount_due * 1.05) || 0);
+            return sum + (customer.amountWithPenalty || 0);
         }, 0);
 
         setCounts(prev => ({
             ...prev,
-            overdueAmount: new Intl.NumberFormat('en-PH', {
-                style: 'currency',
-                currency: 'PHP'
-            }).format(totalOverdue)
+            overdueAmount: new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(totalOverdue)
         }));
     };
 
@@ -318,20 +327,20 @@ const DashboardSalesClerk = () => {
             color: '#2196F3',
             path: '/customers'
         },
-        {
-            title: 'Locations',
-            value: counts.locationCount,
-            icon: '📍',
-            color: '#9C27B0',
-            path: '/locations'
-        },
-        {
-            title: 'Users',
-            value: counts.userCount,
-            icon: '👤',
-            color: '#607D8B',
-            path: '/users'
-        },
+        // {
+        //     title: 'Locations',
+        //     value: counts.locationCount,
+        //     icon: '📍',
+        //     color: '#9C27B0',
+        //     path: '/locations'
+        // },
+        // {
+        //     title: 'Users',
+        //     value: counts.userCount,
+        //     icon: '👤',
+        //     color: '#607D8B',
+        //     path: '/users'
+        // },
 
         // Collection cards
         {
@@ -404,7 +413,7 @@ const DashboardSalesClerk = () => {
                                 // transform: card.urgent ? 'scale(1.02)' : 'scale(1)',
                                 // animation: card.urgent ? 'pulse 2s infinite' : 'none'
                             }}
-                           
+
                         >
                             <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
                                 <div style={{
@@ -554,6 +563,34 @@ const DashboardSalesClerk = () => {
                             🚨 Overdue Customers ({overdueCustomers.length})
                         </h2>
 
+                        {/* Grace Period Info Box */}
+                        <div style={{
+                            marginBottom: '15px',
+                            padding: '16px',
+                            background: 'linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%)',
+                            borderRadius: '8px',
+                            borderLeft: '4px solid #4CAF50',
+                            marginBottom: '12px'
+                        }}>
+                            <div style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                marginBottom: '8px'
+                            }}>
+                                <span style={{ fontSize: '1.2em' }}>ℹ️</span>
+                                <strong style={{ color: '#2e7d32', fontSize: '1.05em' }}>
+                                    Grace Period Policy
+                                </strong>
+                            </div>
+                            <div style={{ fontSize: '0.9em', color: '#1b5e20', lineHeight: '1.6' }}>
+                                Customers have a <strong>3-day grace period</strong> after the due date with <strong>no penalty</strong>.
+                                <br />
+                                A <strong>5% penalty</strong> will be applied starting on the 4th day after the due date.
+                            </div>
+                        </div>
+
+                        {/* Total Overdue Amount */}
                         <div style={{
                             marginBottom: '15px',
                             padding: '12px',
@@ -566,6 +603,7 @@ const DashboardSalesClerk = () => {
                             </strong>
                         </div>
 
+                        {/* Overdue Customers Table */}
                         <div style={{
                             maxHeight: '400px',
                             overflowY: 'auto',
@@ -639,14 +677,17 @@ const DashboardSalesClerk = () => {
                                     {overdueCustomers.slice(0, 10).map((customer, index) => (
                                         <tr key={index} style={{
                                             borderBottom: '1px solid #eee',
-                                            backgroundColor: customer.daysPastDue > 30 ? '#ffebee' : 'white',
+                                            backgroundColor: customer.daysPastDue > 30 ? '#ffebee' :
+                                                customer.daysPastDue > 3 ? '#fff3e0' : '#e8f5e9',
                                             cursor: 'pointer'
                                         }}
                                             onMouseEnter={(e) => {
-                                                e.target.parentElement.style.backgroundColor = '#f5f5f5';
+                                                e.currentTarget.style.backgroundColor = '#f5f5f5';
                                             }}
                                             onMouseLeave={(e) => {
-                                                e.target.parentElement.style.backgroundColor = customer.daysPastDue > 30 ? '#ffebee' : 'white';
+                                                e.currentTarget.style.backgroundColor =
+                                                    customer.daysPastDue > 30 ? '#ffebee' :
+                                                        customer.daysPastDue > 3 ? '#fff3e0' : '#e8f5e9';
                                             }}
                                         >
                                             <td style={{
@@ -670,24 +711,45 @@ const DashboardSalesClerk = () => {
                                             </td>
                                             <td style={{
                                                 padding: '12px',
-                                                textAlign: 'right',
-                                                fontWeight: 'bold',
-                                                color: '#E91E63'
+                                                textAlign: 'right'
                                             }}>
-                                                {
-                                                    new Intl.NumberFormat('en-PH', {
+                                                <div style={{
+                                                    fontWeight: 'bold',
+                                                    color: customer.hasPenalty ? '#E91E63' : '#4CAF50'
+                                                }}>
+                                                    {new Intl.NumberFormat('en-PH', {
                                                         style: 'currency',
                                                         currency: 'PHP'
-                                                    }).format(customer.amount_due * 1.05)
-                                                }
-                                                {/* ₱{parseFloat(customer.amount_due * 1.05).toFixed(2)} */}
-                                                {/* //not orig/ */}
+                                                    }).format(customer.amountWithPenalty)}
+                                                </div>
+                                                {customer.hasPenalty ? (
+                                                    <div style={{
+                                                        fontSize: '0.75em',
+                                                        color: '#E91E63',
+                                                        fontWeight: 'normal'
+                                                    }}>
+                                                        +5% penalty applied
+                                                    </div>
+                                                ) : (
+                                                    <div style={{
+                                                        fontSize: '0.75em',
+                                                        color: '#2e7d32',
+                                                        fontWeight: 'bold',
+                                                        backgroundColor: '#c8e6c9',
+                                                        padding: '2px 6px',
+                                                        borderRadius: '4px',
+                                                        display: 'inline-block'
+                                                    }}>
+                                                        {customer.daysUntilPenalty} {customer.daysUntilPenalty === 1 ? 'day' : 'days'} left
+                                                    </div>
+                                                )}
                                             </td>
                                             <td style={{
                                                 padding: '12px',
                                                 textAlign: 'center',
                                                 fontWeight: 'bold',
-                                                color: customer.daysPastDue > 30 ? '#d32f2f' : '#f57c00'
+                                                color: customer.daysPastDue > 30 ? '#d32f2f' :
+                                                    customer.daysPastDue > 3 ? '#f57c00' : '#388e3c'
                                             }}>
                                                 {customer.daysPastDue} days
                                             </td>
@@ -700,10 +762,13 @@ const DashboardSalesClerk = () => {
                                                     borderRadius: '12px',
                                                     fontSize: '0.8em',
                                                     fontWeight: 'bold',
-                                                    backgroundColor: customer.daysPastDue > 30 ? '#ffcdd2' : '#fff3e0',
-                                                    color: customer.daysPastDue > 30 ? '#d32f2f' : '#f57c00'
+                                                    backgroundColor: customer.daysPastDue > 30 ? '#ffcdd2' :
+                                                        customer.daysPastDue > 3 ? '#fff3e0' : '#c8e6c9',
+                                                    color: customer.daysPastDue > 30 ? '#d32f2f' :
+                                                        customer.daysPastDue > 3 ? '#f57c00' : '#2e7d32'
                                                 }}>
-                                                    {customer.daysPastDue > 30 ? 'CRITICAL' : 'OVERDUE'}
+                                                    {customer.daysPastDue > 30 ? 'CRITICAL' :
+                                                        customer.daysPastDue > 3 ? 'OVERDUE' : 'GRACE PERIOD'}
                                                 </span>
                                             </td>
                                         </tr>

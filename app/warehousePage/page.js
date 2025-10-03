@@ -52,7 +52,7 @@ const WarehousePage = () => {
     setUser_ID(user_id);
 
     if (!user_id) {
-      router.push("/error");
+      router.push('/errorPage');
     }
   }, []);
 

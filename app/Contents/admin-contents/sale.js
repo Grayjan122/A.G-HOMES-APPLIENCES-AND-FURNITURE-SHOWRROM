@@ -28,24 +28,63 @@ const SaleAdmin = () => {
     const [reportDateFrom, setReportDateFrom] = useState('');
     const [reportDateTo, setReportDateTo] = useState('');
     const [reportLocationFilter, setReportLocationFilter] = useState('');
+    const [reportSalesTypeFilter, setReportSalesTypeFilter] = useState(''); // New filter
     const [reportData, setReportData] = useState([]);
     const [isGeneratingReport, setIsGeneratingReport] = useState(false);
     const [reportType, setReportType] = useState('date_range'); // 'date_range' or 'monthly'
     const [reportMonth, setReportMonth] = useState('');
 
-    // Get unique sales from values
+    // Function to categorize sales type
+    const categorizeSalesType = (salesFrom) => {
+        if (!salesFrom) return 'Other';
+        const salesFromLower = salesFrom.toLowerCase();
+        
+        if (salesFromLower === 'walk-in sales' || salesFromLower === 'customer sales') {
+            return 'Full Payment Sales';
+        } else if (salesFromLower === 'installment payment' || salesFromLower === 'installment downpayment') {
+            return 'Installment Sales';
+        }
+        return salesFrom; // Keep original if doesn't match categories
+    };
+
+    // Get unique sales from values with categorization
     const uniqueSalesFrom = [...new Set(salesByInvoice.map(sale => sale.sales_from))].filter(Boolean);
+    const salesTypeOptions = [
+        { value: 'Full Payment Sales', label: 'Full Payment Sales' },
+        { value: 'Installment Sales', label: 'Installment Sales' },
+        ...uniqueSalesFrom
+            .filter(source => {
+                const lower = source.toLowerCase();
+                return !(lower === 'walk-in sales' || lower === 'customer sales' || 
+                        lower === 'installment payment' || lower === 'installment downpayment');
+            })
+            .map(source => ({ value: source, label: source }))
+    ];
+
+    // Sort sales by date and time in descending order (newest first)
+    const sortedSales = [...salesByInvoice].sort((a, b) => {
+        const dateA = new Date(`${a.date} ${a.time}`);
+        const dateB = new Date(`${b.date} ${b.time}`);
+        return dateB - dateA; // Descending order
+    });
 
     // Filter the sales data
-    const filteredSales = salesByInvoice.filter(sale => {
+    const filteredSales = sortedSales.filter(sale => {
         // Location filter
         if (locationFilter && sale.location_id != locationFilter) {
             return false;
         }
 
-        // Sales from filter
-        if (salesFromFilter && sale.sales_from !== salesFromFilter) {
-            return false;
+        // Sales from filter with categorization
+        if (salesFromFilter) {
+            const saleCategory = categorizeSalesType(sale.sales_from);
+            if (salesFromFilter === 'Full Payment Sales' || salesFromFilter === 'Installment Sales') {
+                if (saleCategory !== salesFromFilter) {
+                    return false;
+                }
+            } else if (sale.sales_from !== salesFromFilter) {
+                return false;
+            }
         }
 
         // Date filters
@@ -187,7 +226,7 @@ const SaleAdmin = () => {
         setIsGeneratingReport(true);
 
         // Filter sales data based on report type
-        const reportSales = salesByInvoice.filter(sale => {
+        const reportSales = sortedSales.filter(sale => {
             const saleDate = new Date(sale.date);
             let inDateRange = false;
 
@@ -208,26 +247,31 @@ const SaleAdmin = () => {
             // Check location filter
             const locationMatch = reportLocationFilter === '' || sale.location_id === reportLocationFilter;
 
-            return inDateRange && locationMatch;
-        });
-
-        // Group sales by location and sales_from, combining walk-in and customer sales
-        const groupedData = reportSales.reduce((acc, sale) => {
-            const locationName = locationList.find(loc => loc.location_id === sale.location_id)?.location_name || 'Unknown Location';
-            let salesFrom = sale.sales_from || 'Unknown Source';
-
-            // Combine walk-in sales and customer sales into "Full Purchase"
-            const salesFromLower = salesFrom.toLowerCase();
-            if (salesFromLower === 'walk-in sales' || salesFromLower === 'customer sales') {
-                salesFrom = 'Full Purchase';
+            // Check sales type filter
+            let salesTypeMatch = true;
+            if (reportSalesTypeFilter) {
+                const saleCategory = categorizeSalesType(sale.sales_from);
+                if (reportSalesTypeFilter === 'Full Payment Sales' || reportSalesTypeFilter === 'Installment Sales') {
+                    salesTypeMatch = saleCategory === reportSalesTypeFilter;
+                } else {
+                    salesTypeMatch = sale.sales_from === reportSalesTypeFilter;
+                }
             }
 
-            const key = `${locationName}_${salesFrom}`;
+            return inDateRange && locationMatch && salesTypeMatch;
+        });
+
+        // Group sales by location and sales_from, with categorization
+        const groupedData = reportSales.reduce((acc, sale) => {
+            const locationName = locationList.find(loc => loc.location_id === sale.location_id)?.location_name || 'Unknown Location';
+            const salesCategory = categorizeSalesType(sale.sales_from);
+            
+            const key = `${locationName}_${salesCategory}`;
 
             if (!acc[key]) {
                 acc[key] = {
                     location: locationName,
-                    salesFrom: salesFrom,
+                    salesFrom: salesCategory,
                     totalAmount: 0,
                     totalTransactions: 0,
                     transactions: []
@@ -258,6 +302,7 @@ const SaleAdmin = () => {
             totalTransactions: reportSales.length,
             dateRange: dateRangeForReport,
             locationFilter: reportLocationFilter,
+            salesTypeFilter: reportSalesTypeFilter,
             reportType: reportType,
             reportMonth: reportMonth
         });
@@ -270,6 +315,8 @@ const SaleAdmin = () => {
         const locationFilterText = reportLocationFilter
             ? locationList.find(loc => loc.location_id === reportLocationFilter)?.location_name || 'Selected Location'
             : 'All Locations';
+
+        const salesTypeFilterText = reportData.salesTypeFilter || 'All Sales Types';
 
         const periodText = reportData.reportType === 'monthly'
             ? `Month: ${new Date(reportData.dateRange.from).toLocaleDateString('en-US', { year: 'numeric', month: 'long' })}`
@@ -351,14 +398,16 @@ const SaleAdmin = () => {
             </head>
             <body>
                 <div class="header">
-                    <h1>SALES REPORT</h1>
+                    <h1>A.G HOMES SALES REPORT</h1>
                     <h3>${periodText}</h3>
                     <h4>Location: ${locationFilterText}</h4>
+                    <h4>Sales Type: ${salesTypeFilterText}</h4>
                 </div>
                 
                 <div class="summary">
                     <h3 style="margin-top: 0; color: #28a745;">Summary</h3>
                     <div class="summary-item"><strong>Location Filter:</strong> ${locationFilterText}</div>
+                    <div class="summary-item"><strong>Sales Type Filter:</strong> ${salesTypeFilterText}</div>
                     <div class="summary-item"><strong>Total Sales:</strong> ₱${reportData.totalSales.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                     <div class="summary-item"><strong>Total Transactions:</strong> ${reportData.totalTransactions}</div>
                     <div class="summary-item"><strong>Average Transaction:</strong> ₱${reportData.totalTransactions > 0 ? (reportData.totalSales / reportData.totalTransactions).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}</div>
@@ -421,53 +470,35 @@ const SaleAdmin = () => {
             <div className='customer-main'>
                 <div className='customer-header'>
                     <h1 className='h-customer'>SALES MANAGEMENT</h1>
-
-                    {/* Sales Report Button */}
                     <div>
-                        <button className='add-pro-bttn'  onClick={() => setShowReportModal(true)}>📊 Generate Sales Report</button>
+                        <button className='add-pro-bttn' onClick={() => setShowReportModal(true)}>Generate Sales Report</button>
                     </div>
-                    {/* <button
-                        onClick={() => setShowReportModal(true)}
-                        style={{
-                            padding: "10px 20px",
-                            backgroundColor: "#007bff",
-                            color: "white",
-                            border: "none",
-                            borderRadius: "6px",
-                            cursor: "pointer",
-                            fontSize: "14px",
-                            fontWeight: "500",
-                            marginLeft: "auto"
-                        }}
-                        onMouseEnter={(e) => {
-                            e.target.style.backgroundColor = '#0056b3';
-                        }}
-                        onMouseLeave={(e) => {
-                            e.target.style.backgroundColor = '#007bff';
-                        }}
-                    >
-                        📊 Generate Sales Report
-                    </button> */}
                 </div>
 
                 {/* Filter Controls */}
                 <div style={{
-                    padding: '15px',
+                    padding: '20px',
                     backgroundColor: '#ffffff',
-                    borderRadius: '8px',
-                    margin: '10px 0',
+                    borderRadius: '12px',
+                    margin: '15px 0',
                     border: '1px solid #e9ecef',
-                    boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                    boxShadow: '0 4px 6px rgba(0,0,0,0.07)'
                 }}>
                     <div style={{
                         display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                        gap: '15px',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                        gap: '20px',
                         alignItems: 'end'
                     }}>
                         {/* Location Filter */}
                         <div>
-                            <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500', fontSize: '14px' }}>
+                            <label style={{ 
+                                display: 'block', 
+                                marginBottom: '8px', 
+                                fontWeight: '600', 
+                                fontSize: '14px',
+                                color: '#374151'
+                            }}>
                                 Filter by Location
                             </label>
                             <select
@@ -475,10 +506,21 @@ const SaleAdmin = () => {
                                 onChange={(e) => setLocationFilter(e.target.value)}
                                 style={{
                                     width: '100%',
-                                    padding: '8px 12px',
-                                    border: '1px solid #ced4da',
-                                    borderRadius: '4px',
-                                    fontSize: '14px'
+                                    padding: '12px 16px',
+                                    border: '2px solid #e5e7eb',
+                                    borderRadius: '8px',
+                                    fontSize: '14px',
+                                    backgroundColor: '#ffffff',
+                                    transition: 'all 0.2s ease',
+                                    outline: 'none'
+                                }}
+                                onFocus={(e) => {
+                                    e.target.style.borderColor = '#3b82f6';
+                                    e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.1)';
+                                }}
+                                onBlur={(e) => {
+                                    e.target.style.borderColor = '#e5e7eb';
+                                    e.target.style.boxShadow = 'none';
                                 }}
                             >
                                 <option value="">All Locations</option>
@@ -490,26 +532,43 @@ const SaleAdmin = () => {
                             </select>
                         </div>
 
-                        {/* Sales From Filter */}
+                        {/* Sales Type Filter */}
                         <div>
-                            <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500', fontSize: '14px' }}>
-                                Filter by Sales From
+                            <label style={{ 
+                                display: 'block', 
+                                marginBottom: '8px', 
+                                fontWeight: '600', 
+                                fontSize: '14px',
+                                color: '#374151'
+                            }}>
+                                Filter by Sales Type
                             </label>
                             <select
                                 value={salesFromFilter}
                                 onChange={(e) => setSalesFromFilter(e.target.value)}
                                 style={{
                                     width: '100%',
-                                    padding: '8px 12px',
-                                    border: '1px solid #ced4da',
-                                    borderRadius: '4px',
-                                    fontSize: '14px'
+                                    padding: '12px 16px',
+                                    border: '2px solid #e5e7eb',
+                                    borderRadius: '8px',
+                                    fontSize: '14px',
+                                    backgroundColor: '#ffffff',
+                                    transition: 'all 0.2s ease',
+                                    outline: 'none'
+                                }}
+                                onFocus={(e) => {
+                                    e.target.style.borderColor = '#3b82f6';
+                                    e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.1)';
+                                }}
+                                onBlur={(e) => {
+                                    e.target.style.borderColor = '#e5e7eb';
+                                    e.target.style.boxShadow = 'none';
                                 }}
                             >
-                                <option value="">All Sources</option>
-                                {uniqueSalesFrom.map((source) => (
-                                    <option key={source} value={source}>
-                                        {source}
+                                <option value="">All Sales Types</option>
+                                {salesTypeOptions.map((option) => (
+                                    <option key={option.value} value={option.value}>
+                                        {option.label}
                                     </option>
                                 ))}
                             </select>
@@ -517,7 +576,13 @@ const SaleAdmin = () => {
 
                         {/* Date Filter Type */}
                         <div>
-                            <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500', fontSize: '14px' }}>
+                            <label style={{ 
+                                display: 'block', 
+                                marginBottom: '8px', 
+                                fontWeight: '600', 
+                                fontSize: '14px',
+                                color: '#374151'
+                            }}>
                                 Date Filter
                             </label>
                             <select
@@ -529,10 +594,21 @@ const SaleAdmin = () => {
                                 }}
                                 style={{
                                     width: '100%',
-                                    padding: '8px 12px',
-                                    border: '1px solid #ced4da',
-                                    borderRadius: '4px',
-                                    fontSize: '14px'
+                                    padding: '12px 16px',
+                                    border: '2px solid #e5e7eb',
+                                    borderRadius: '8px',
+                                    fontSize: '14px',
+                                    backgroundColor: '#ffffff',
+                                    transition: 'all 0.2s ease',
+                                    outline: 'none'
+                                }}
+                                onFocus={(e) => {
+                                    e.target.style.borderColor = '#3b82f6';
+                                    e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.1)';
+                                }}
+                                onBlur={(e) => {
+                                    e.target.style.borderColor = '#e5e7eb';
+                                    e.target.style.boxShadow = 'none';
                                 }}
                             >
                                 <option value="">All Dates</option>
@@ -544,7 +620,13 @@ const SaleAdmin = () => {
                         {/* Specific Date Input */}
                         {dateFilter === 'daily' && (
                             <div>
-                                <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500', fontSize: '14px' }}>
+                                <label style={{ 
+                                    display: 'block', 
+                                    marginBottom: '8px', 
+                                    fontWeight: '600', 
+                                    fontSize: '14px',
+                                    color: '#374151'
+                                }}>
                                     Select Date
                                 </label>
                                 <input
@@ -553,10 +635,21 @@ const SaleAdmin = () => {
                                     onChange={(e) => setSpecificDate(e.target.value)}
                                     style={{
                                         width: '100%',
-                                        padding: '8px 12px',
-                                        border: '1px solid #ced4da',
-                                        borderRadius: '4px',
-                                        fontSize: '14px'
+                                        padding: '12px 16px',
+                                        border: '2px solid #e5e7eb',
+                                        borderRadius: '8px',
+                                        fontSize: '14px',
+                                        backgroundColor: '#ffffff',
+                                        transition: 'all 0.2s ease',
+                                        outline: 'none'
+                                    }}
+                                    onFocus={(e) => {
+                                        e.target.style.borderColor = '#3b82f6';
+                                        e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.1)';
+                                    }}
+                                    onBlur={(e) => {
+                                        e.target.style.borderColor = '#e5e7eb';
+                                        e.target.style.boxShadow = 'none';
                                     }}
                                 />
                             </div>
@@ -565,7 +658,13 @@ const SaleAdmin = () => {
                         {/* Specific Month Input */}
                         {dateFilter === 'monthly' && (
                             <div>
-                                <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500', fontSize: '14px' }}>
+                                <label style={{ 
+                                    display: 'block', 
+                                    marginBottom: '8px', 
+                                    fontWeight: '600', 
+                                    fontSize: '14px',
+                                    color: '#374151'
+                                }}>
                                     Select Month
                                 </label>
                                 <input
@@ -574,10 +673,21 @@ const SaleAdmin = () => {
                                     onChange={(e) => setSpecificMonth(e.target.value)}
                                     style={{
                                         width: '100%',
-                                        padding: '8px 12px',
-                                        border: '1px solid #ced4da',
-                                        borderRadius: '4px',
-                                        fontSize: '14px'
+                                        padding: '12px 16px',
+                                        border: '2px solid #e5e7eb',
+                                        borderRadius: '8px',
+                                        fontSize: '14px',
+                                        backgroundColor: '#ffffff',
+                                        transition: 'all 0.2s ease',
+                                        outline: 'none'
+                                    }}
+                                    onFocus={(e) => {
+                                        e.target.style.borderColor = '#3b82f6';
+                                        e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.1)';
+                                    }}
+                                    onBlur={(e) => {
+                                        e.target.style.borderColor = '#e5e7eb';
+                                        e.target.style.boxShadow = 'none';
                                     }}
                                 />
                             </div>
@@ -587,49 +697,54 @@ const SaleAdmin = () => {
 
                 {/* Total Sales Summary */}
                 <div style={{
-                    padding: '15px',
-                    backgroundColor: '#e8f5e8',
-                    borderRadius: '8px',
-                    margin: '10px 0',
-                    border: '1px solid #c3e6c3',
+                    padding: '20px',
+                    background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                    borderRadius: '12px',
+                    margin: '15px 0',
+                    color: 'white',
                     display: 'flex',
                     justifyContent: 'space-between',
-                    alignItems: 'center'
+                    alignItems: 'center',
+                    boxShadow: '0 4px 6px rgba(16, 185, 129, 0.3)'
                 }}>
                     <div>
-                        <span style={{ fontSize: '18px', fontWeight: '600', color: '#155724' }}>
-                            Total Sales: ₱{totalSales.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </span>
-                        <span style={{ marginLeft: '15px', fontSize: '14px', color: '#6c757d' }}>
-                            ({filteredSales.length} of {salesByInvoice.length} records)
-                        </span>
+                        <div style={{ fontSize: '14px', opacity: 0.9, marginBottom: '5px' }}>Total Sales Amount</div>
+                        <div style={{ fontSize: '28px', fontWeight: '700' }}>
+                            ₱{totalSales.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </div>
+                        <div style={{ fontSize: '14px', opacity: 0.8, marginTop: '5px' }}>
+                            {filteredSales.length} of {salesByInvoice.length} transactions
+                        </div>
                     </div>
                 </div>
 
                 {/* Active Filters */}
                 <div style={{
-                    padding: '10px',
-                    backgroundColor: '#f8f9fa',
-                    borderRadius: '6px',
-                    margin: '10px 0',
+                    padding: '15px',
+                    backgroundColor: '#f8fafc',
+                    borderRadius: '10px',
+                    margin: '15px 0',
                     fontSize: '14px',
                     display: 'flex',
                     justifyContent: 'space-between',
-                    alignItems: 'center'
+                    alignItems: 'center',
+                    border: '1px solid #e2e8f0'
                 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
-                        <strong>Active Filters:</strong>
+                    <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+                        <strong style={{ color: '#1f2937' }}>Active Filters:</strong>
 
                         {locationFilter && (
                             <span style={{
                                 display: 'inline-flex',
                                 alignItems: 'center',
-                                gap: '6px',
-                                padding: '4px 8px',
-                                backgroundColor: '#e9ecef',
-                                borderRadius: '16px',
+                                gap: '8px',
+                                padding: '6px 12px',
+                                backgroundColor: '#dbeafe',
+                                color: '#1e40af',
+                                borderRadius: '20px',
                                 fontSize: '13px',
-                                border: '1px solid #dee2e6'
+                                border: '1px solid #bfdbfe',
+                                fontWeight: '500'
                             }}>
                                 Location: {locationList.find(loc => loc.location_id === locationFilter)?.location_name || locationFilter}
                                 <button
@@ -638,7 +753,7 @@ const SaleAdmin = () => {
                                     style={{
                                         background: 'none',
                                         border: 'none',
-                                        color: '#6c757d',
+                                        color: '#1e40af',
                                         cursor: 'pointer',
                                         padding: '2px',
                                         borderRadius: '50%',
@@ -646,23 +761,19 @@ const SaleAdmin = () => {
                                         alignItems: 'center',
                                         justifyContent: 'center',
                                         width: '18px',
-                                        height: '18px',
-                                        marginLeft: '4px'
+                                        height: '18px'
                                     }}
                                     onMouseEnter={(e) => {
-                                        e.target.style.backgroundColor = '#dc3545';
+                                        e.target.style.backgroundColor = '#ef4444';
                                         e.target.style.color = 'white';
                                     }}
                                     onMouseLeave={(e) => {
                                         e.target.style.backgroundColor = 'transparent';
-                                        e.target.style.color = '#6c757d';
+                                        e.target.style.color = '#1e40af';
                                     }}
                                     title="Remove location filter"
                                 >
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                        <line x1="18" y1="6" x2="6" y2="18"></line>
-                                        <line x1="6" y1="6" x2="18" y2="18"></line>
-                                    </svg>
+                                    ×
                                 </button>
                             </span>
                         )}
@@ -671,21 +782,23 @@ const SaleAdmin = () => {
                             <span style={{
                                 display: 'inline-flex',
                                 alignItems: 'center',
-                                gap: '6px',
-                                padding: '4px 8px',
-                                backgroundColor: '#e9ecef',
-                                borderRadius: '16px',
+                                gap: '8px',
+                                padding: '6px 12px',
+                                backgroundColor: '#dcfce7',
+                                color: '#166534',
+                                borderRadius: '20px',
                                 fontSize: '13px',
-                                border: '1px solid #dee2e6'
+                                border: '1px solid #bbf7d0',
+                                fontWeight: '500'
                             }}>
-                                Sales From: {salesFromFilter}
+                                Sales Type: {salesFromFilter}
                                 <button
                                     type="button"
                                     onClick={() => removeFilter('salesFrom')}
                                     style={{
                                         background: 'none',
                                         border: 'none',
-                                        color: '#6c757d',
+                                        color: '#166534',
                                         cursor: 'pointer',
                                         padding: '2px',
                                         borderRadius: '50%',
@@ -693,23 +806,19 @@ const SaleAdmin = () => {
                                         alignItems: 'center',
                                         justifyContent: 'center',
                                         width: '18px',
-                                        height: '18px',
-                                        marginLeft: '4px'
+                                        height: '18px'
                                     }}
                                     onMouseEnter={(e) => {
-                                        e.target.style.backgroundColor = '#dc3545';
+                                        e.target.style.backgroundColor = '#ef4444';
                                         e.target.style.color = 'white';
                                     }}
                                     onMouseLeave={(e) => {
                                         e.target.style.backgroundColor = 'transparent';
-                                        e.target.style.color = '#6c757d';
+                                        e.target.style.color = '#166534';
                                     }}
-                                    title="Remove sales from filter"
+                                    title="Remove sales type filter"
                                 >
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                        <line x1="18" y1="6" x2="6" y2="18"></line>
-                                        <line x1="6" y1="6" x2="18" y2="18"></line>
-                                    </svg>
+                                    ×
                                 </button>
                             </span>
                         )}
@@ -718,23 +827,25 @@ const SaleAdmin = () => {
                             <span style={{
                                 display: 'inline-flex',
                                 alignItems: 'center',
-                                gap: '6px',
-                                padding: '4px 8px',
-                                backgroundColor: '#e9ecef',
-                                borderRadius: '16px',
+                                gap: '8px',
+                                padding: '6px 12px',
+                                backgroundColor: '#fef3c7',
+                                color: '#92400e',
+                                borderRadius: '20px',
                                 fontSize: '13px',
-                                border: '1px solid #dee2e6'
+                                border: '1px solid #fde68a',
+                                fontWeight: '500'
                             }}>
-                                {dateFilter === 'daily' && specificDate && `Daily: ${new Date(specificDate).toLocaleDateString()}`}
-                                {dateFilter === 'monthly' && specificMonth && `Monthly: ${new Date(specificMonth + '-01').toLocaleDateString('en-US', { year: 'numeric', month: 'long' })}`}
-                                {dateFilter && !specificDate && !specificMonth && `${dateFilter.charAt(0).toUpperCase() + dateFilter.slice(1)} Sales`}
+                                Date: {dateFilter === 'daily' && specificDate && `${new Date(specificDate).toLocaleDateString()}`}
+                                {dateFilter === 'monthly' && specificMonth && `${new Date(specificMonth + '-01').toLocaleDateString('en-US', { year: 'numeric', month: 'long' })}`}
+                                {dateFilter && !specificDate && !specificMonth && `${dateFilter.charAt(0).toUpperCase() + dateFilter.slice(1)}`}
                                 <button
                                     type="button"
                                     onClick={() => removeFilter('date')}
                                     style={{
                                         background: 'none',
                                         border: 'none',
-                                        color: '#6c757d',
+                                        color: '#92400e',
                                         cursor: 'pointer',
                                         padding: '2px',
                                         borderRadius: '50%',
@@ -742,29 +853,25 @@ const SaleAdmin = () => {
                                         alignItems: 'center',
                                         justifyContent: 'center',
                                         width: '18px',
-                                        height: '18px',
-                                        marginLeft: '4px'
+                                        height: '18px'
                                     }}
                                     onMouseEnter={(e) => {
-                                        e.target.style.backgroundColor = '#dc3545';
+                                        e.target.style.backgroundColor = '#ef4444';
                                         e.target.style.color = 'white';
                                     }}
                                     onMouseLeave={(e) => {
                                         e.target.style.backgroundColor = 'transparent';
-                                        e.target.style.color = '#6c757d';
+                                        e.target.style.color = '#92400e';
                                     }}
                                     title="Remove date filter"
                                 >
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                        <line x1="18" y1="6" x2="6" y2="18"></line>
-                                        <line x1="6" y1="6" x2="18" y2="18"></line>
-                                    </svg>
+                                    ×
                                 </button>
                             </span>
                         )}
 
                         {!locationFilter && !salesFromFilter && !dateFilter && (
-                            <span style={{ color: '#6c757d' }}>None</span>
+                            <span style={{ color: '#6b7280', fontStyle: 'italic' }}>None applied</span>
                         )}
                     </div>
 
@@ -773,19 +880,21 @@ const SaleAdmin = () => {
                             type="button"
                             onClick={clearAllFilters}
                             style={{
-                                padding: "8px 16px",
-                                backgroundColor: "#6c757d",
+                                padding: "10px 18px",
+                                backgroundColor: "#6b7280",
                                 color: "white",
                                 border: "none",
-                                borderRadius: "6px",
+                                borderRadius: "8px",
                                 cursor: "pointer",
-                                fontSize: "14px"
+                                fontSize: "14px",
+                                fontWeight: "500",
+                                transition: "all 0.2s ease"
                             }}
                             onMouseEnter={(e) => {
-                                e.target.style.backgroundColor = '#5a6268';
+                                e.target.style.backgroundColor = '#4b5563';
                             }}
                             onMouseLeave={(e) => {
-                                e.target.style.backgroundColor = '#6c757d';
+                                e.target.style.backgroundColor = '#6b7280';
                             }}
                         >
                             Clear All Filters
@@ -793,74 +902,223 @@ const SaleAdmin = () => {
                     </div>
                 </div>
 
-
-
-                <div className='tableContainer' style={{ height: '35vh', overflowY: 'auto' }}>
-                    {currentItems && currentItems.length > 0 ? (
-                        <table className='table'>
-                            <thead>
-                                <tr>
-                                    <th className='t2'>INVOICE #</th>
-                                    <th className='th1'>SALES FROM</th>
-                                    <th className='th1'>TOTAL</th>
-                                    <th className='th1'>DATE</th>
-                                    <th className='th1'>TIME</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {currentItems.map((p, i) => (
-                                    <tr className='table-row' key={i} onClick={() => { }}>
-                                        <td className='td-name'>{p.invoice_id}</td>
-                                        <td style={{ textAlign: 'center' }}>{p.sales_from}</td>
-                                        <td style={{ textAlign: 'center' }}>₱{parseFloat(p.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                        <td style={{ textAlign: 'center' }}>{p.date}</td>
-                                        <td style={{ textAlign: 'center' }}>{p.time}</td>
+                {/* Enhanced Table Container */}
+                <div style={{
+                    backgroundColor: '#ffffff',
+                    borderRadius: '12px',
+                    overflow: 'hidden',
+                    boxShadow: '0 4px 6px rgba(0, 0, 0, 0.07)',
+                    border: '1px solid #e5e7eb'
+                }}>
+                    <div style={{ height: '400px', overflowY: 'auto' }}>
+                        {currentItems && currentItems.length > 0 ? (
+                            <table style={{
+                                width: '100%',
+                                borderCollapse: 'collapse',
+                                fontSize: '14px'
+                            }}>
+                                <thead style={{
+                                    position: 'sticky',
+                                    top: 0,
+                                    backgroundColor: '#f8fafc',
+                                    zIndex: 10
+                                }}>
+                                    <tr>
+                                        <th style={{
+                                            padding: '16px 20px',
+                                            textAlign: 'left',
+                                            fontWeight: '600',
+                                            color: '#374151',
+                                            fontSize: '13px',
+                                            textTransform: 'uppercase',
+                                            letterSpacing: '0.05em',
+                                            borderBottom: '2px solid #e5e7eb'
+                                        }}>
+                                            Invoice #
+                                        </th>
+                                        <th style={{
+                                            padding: '16px 20px',
+                                            textAlign: 'center',
+                                            fontWeight: '600',
+                                            color: '#374151',
+                                            fontSize: '13px',
+                                            textTransform: 'uppercase',
+                                            letterSpacing: '0.05em',
+                                            borderBottom: '2px solid #e5e7eb'
+                                        }}>
+                                            Sales Type
+                                        </th>
+                                        <th style={{
+                                            padding: '16px 20px',
+                                            textAlign: 'center',
+                                            fontWeight: '600',
+                                            color: '#374151',
+                                            fontSize: '13px',
+                                            textTransform: 'uppercase',
+                                            letterSpacing: '0.05em',
+                                            borderBottom: '2px solid #e5e7eb'
+                                        }}>
+                                            Amount
+                                        </th>
+                                        <th style={{
+                                            padding: '16px 20px',
+                                            textAlign: 'center',
+                                            fontWeight: '600',
+                                            color: '#374151',
+                                            fontSize: '13px',
+                                            textTransform: 'uppercase',
+                                            letterSpacing: '0.05em',
+                                            borderBottom: '2px solid #e5e7eb'
+                                        }}>
+                                            Date
+                                        </th>
+                                        <th style={{
+                                            padding: '16px 20px',
+                                            textAlign: 'center',
+                                            fontWeight: '600',
+                                            color: '#374151',
+                                            fontSize: '13px',
+                                            textTransform: 'uppercase',
+                                            letterSpacing: '0.05em',
+                                            borderBottom: '2px solid #e5e7eb'
+                                        }}>
+                                            Time
+                                        </th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    ) : (
-                        <div style={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            height: '100%',
-                            textAlign: 'center',
-                            color: '#6c757d',
-                            padding: '40px 20px'
-                        }}>
+                                </thead>
+                                <tbody>
+                                    {currentItems.map((sale, i) => (
+                                        <tr 
+                                            key={i} 
+                                            style={{
+                                                borderBottom: '1px solid #f3f4f6',
+                                                transition: 'all 0.2s ease',
+                                                cursor: 'pointer'
+                                            }}
+                                            onMouseEnter={(e) => {
+                                                e.currentTarget.style.backgroundColor = '#f9fafb';
+                                            }}
+                                            onMouseLeave={(e) => {
+                                                e.currentTarget.style.backgroundColor = 'transparent';
+                                            }}
+                                        >
+                                            <td style={{
+                                                padding: '16px 20px',
+                                                fontWeight: '600',
+                                                color: '#1f2937'
+                                            }}>
+                                                {sale.invoice_id}
+                                            </td>
+                                            <td style={{
+                                                padding: '16px 20px',
+                                                textAlign: 'center'
+                                            }}>
+                                                <span style={{
+                                                    padding: '4px 12px',
+                                                    borderRadius: '20px',
+                                                    fontSize: '12px',
+                                                    fontWeight: '500',
+                                                    backgroundColor: categorizeSalesType(sale.sales_from) === 'Full Payment Sales' 
+                                                        ? '#dcfce7' 
+                                                        : categorizeSalesType(sale.sales_from) === 'Installment Sales'
+                                                        ? '#dbeafe'
+                                                        : '#f3f4f6',
+                                                    color: categorizeSalesType(sale.sales_from) === 'Full Payment Sales'
+                                                        ? '#166534'
+                                                        : categorizeSalesType(sale.sales_from) === 'Installment Sales'
+                                                        ? '#1e40af'
+                                                        : '#374151'
+                                                }}>
+                                                    {categorizeSalesType(sale.sales_from)}
+                                                </span>
+                                            </td>
+                                            <td style={{
+                                                padding: '16px 20px',
+                                                textAlign: 'center',
+                                                fontWeight: '600',
+                                                color: '#059669',
+                                                fontSize: '15px'
+                                            }}>
+                                                ₱{parseFloat(sale.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                            </td>
+                                            <td style={{
+                                                padding: '16px 20px',
+                                                textAlign: 'center',
+                                                color: '#6b7280'
+                                            }}>
+                                                {new Date(sale.date).toLocaleDateString('en-US', {
+                                                    month: 'short',
+                                                    day: 'numeric',
+                                                    year: 'numeric'
+                                                })}
+                                            </td>
+                                            <td style={{
+                                                padding: '16px 20px',
+                                                textAlign: 'center',
+                                                color: '#6b7280',
+                                                fontFamily: 'monospace'
+                                            }}>
+                                                {sale.time}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        ) : (
                             <div style={{
-                                fontSize: '48px',
-                                marginBottom: '20px',
-                                opacity: 0.3
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                height: '400px',
+                                textAlign: 'center',
+                                color: '#6b7280',
+                                padding: '40px 20px'
                             }}>
-                                📊
+                                <div style={{
+                                    width: '80px',
+                                    height: '80px',
+                                    backgroundColor: '#f3f4f6',
+                                    borderRadius: '50%',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontSize: '32px',
+                                    marginBottom: '20px'
+                                }}>
+                                    📊
+                                </div>
+                                <h3 style={{
+                                    color: '#374151',
+                                    marginBottom: '12px',
+                                    fontWeight: '600',
+                                    fontSize: '18px'
+                                }}>
+                                    {salesByInvoice.length === 0 ? 'No sales data available' : 'No sales match the current filters'}
+                                </h3>
+                                <p style={{
+                                    margin: '0',
+                                    fontSize: '14px',
+                                    maxWidth: '400px',
+                                    lineHeight: '1.5',
+                                    color: '#9ca3af'
+                                }}>
+                                    {salesByInvoice.length === 0
+                                        ? 'Sales transactions will appear here once they are recorded in the system.'
+                                        : 'Try adjusting your filters to see more results, or clear all filters to view all sales data.'
+                                    }
+                                </p>
                             </div>
-                            <h4 style={{
-                                color: '#495057',
-                                marginBottom: '10px',
-                                fontWeight: '500'
-                            }}>
-                                {salesByInvoice.length === 0 ? 'No sales data available' : 'No sales match the current filters'}
-                            </h4>
-                            <p style={{
-                                margin: '0',
-                                fontSize: '14px',
-                                maxWidth: '300px',
-                                lineHeight: '1.4'
-                            }}>
-                                {salesByInvoice.length === 0
-                                    ? 'Sales data will appear here once transactions are recorded.'
-                                    : 'Try adjusting your filters to see more results.'
-                                }
-                            </p>
-                        </div>
-                    )}
+                        )}
+                    </div>
                 </div>
 
                 {totalPages > 1 && currentItems && currentItems.length > 0 && (
-                    <div style={{ justifySelf: 'center' }}>
+                    <div style={{ 
+                        display: 'flex',
+                        justifyContent: 'center',
+                        marginTop: '20px'
+                    }}>
                         <CustomPagination
                             currentPage={currentPage}
                             totalPages={totalPages}
@@ -878,7 +1136,7 @@ const SaleAdmin = () => {
                         left: 0,
                         width: '100%',
                         height: '100%',
-                        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                        backgroundColor: 'rgba(0, 0, 0, 0.6)',
                         zIndex: 1000,
                         display: 'flex',
                         alignItems: 'center',
@@ -886,28 +1144,33 @@ const SaleAdmin = () => {
                     }}>
                         <div style={{
                             backgroundColor: 'white',
-                            borderRadius: '12px',
+                            borderRadius: '16px',
                             padding: '0',
-                            maxWidth: '90%',
-                            maxHeight: '90%',
-                            width: reportData.sales ? '1000px' : '500px',
-                            boxShadow: '0 10px 30px rgba(0, 0, 0, 0.3)',
+                            maxWidth: '95%',
+                            maxHeight: '95%',
+                            width: reportData.sales ? '1200px' : '600px',
+                            boxShadow: '0 25px 50px rgba(0, 0, 0, 0.25)',
                             overflow: 'hidden',
                             display: 'flex',
                             flexDirection: 'column'
                         }}>
                             {/* Modal Header */}
                             <div style={{
-                                padding: '20px',
-                                backgroundColor: '#007bff',
+                                padding: '24px 30px',
+                                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                                 color: 'white',
                                 display: 'flex',
                                 justifyContent: 'space-between',
                                 alignItems: 'center'
                             }}>
-                                <h3 style={{ margin: 0, fontSize: '20px', fontWeight: '600' }}>
-                                    📊 Sales Report Generator
-                                </h3>
+                                <div>
+                                    <h3 style={{ margin: '0 0 4px 0', fontSize: '22px', fontWeight: '700' }}>
+                                        Sales Report Generator
+                                    </h3>
+                                    <p style={{ margin: 0, opacity: 0.9, fontSize: '14px' }}>
+                                        Generate detailed sales analytics and reports
+                                    </p>
+                                </div>
                                 <button
                                     onClick={() => {
                                         setShowReportModal(false);
@@ -915,6 +1178,7 @@ const SaleAdmin = () => {
                                         setReportDateFrom('');
                                         setReportDateTo('');
                                         setReportLocationFilter('');
+                                        setReportSalesTypeFilter('');
                                         setReportType('date_range');
                                         setReportMonth('');
                                     }}
@@ -922,15 +1186,16 @@ const SaleAdmin = () => {
                                         background: 'none',
                                         border: 'none',
                                         color: 'white',
-                                        fontSize: '24px',
+                                        fontSize: '28px',
                                         cursor: 'pointer',
                                         padding: '0',
-                                        width: '30px',
-                                        height: '30px',
+                                        width: '36px',
+                                        height: '36px',
                                         borderRadius: '50%',
                                         display: 'flex',
                                         alignItems: 'center',
-                                        justifyContent: 'center'
+                                        justifyContent: 'center',
+                                        transition: 'all 0.2s ease'
                                     }}
                                     onMouseEnter={(e) => {
                                         e.target.style.backgroundColor = 'rgba(255, 255, 255, 0.2)';
@@ -947,28 +1212,25 @@ const SaleAdmin = () => {
                             <div style={{
                                 flex: 1,
                                 overflow: 'auto',
-                                padding: '20px'
+                                padding: '30px'
                             }}>
                                 {!reportData.sales ? (
-                                    // Date Range Selection
+                                    // Report Configuration
                                     <div>
-                                        <p style={{ marginBottom: '20px', color: '#6c757d', fontSize: '14px' }}>
-                                            Select a report type and specify the date range or month to generate your sales report. The report will include detailed sales data, summaries, and analytics for the selected period.
-                                        </p>
-
                                         <div style={{
                                             display: 'grid',
-                                            gridTemplateColumns: reportType === 'date_range' ? '1fr 1fr 1fr' : '1fr 1fr',
-                                            gap: '20px',
-                                            marginBottom: '30px'
+                                            gridTemplateColumns: reportType === 'date_range' ? 'repeat(4, 1fr)' : 'repeat(4, 1fr)',
+                                            gap: '25px',
+                                            marginBottom: '35px'
                                         }}>
                                             {/* Report Type Selection */}
                                             <div>
                                                 <label style={{
                                                     display: 'block',
-                                                    marginBottom: '8px',
-                                                    fontWeight: '500',
-                                                    color: '#333'
+                                                    marginBottom: '10px',
+                                                    fontWeight: '600',
+                                                    color: '#374151',
+                                                    fontSize: '14px'
                                                 }}>
                                                     Report Type *
                                                 </label>
@@ -976,7 +1238,6 @@ const SaleAdmin = () => {
                                                     value={reportType}
                                                     onChange={(e) => {
                                                         setReportType(e.target.value);
-                                                        // Clear existing selections when switching types
                                                         if (e.target.value === 'monthly') {
                                                             setReportDateFrom('');
                                                             setReportDateTo('');
@@ -986,17 +1247,11 @@ const SaleAdmin = () => {
                                                     }}
                                                     style={{
                                                         width: '100%',
-                                                        padding: '12px',
-                                                        border: '2px solid #e9ecef',
-                                                        borderRadius: '8px',
+                                                        padding: '12px 16px',
+                                                        border: '2px solid #e5e7eb',
+                                                        borderRadius: '10px',
                                                         fontSize: '14px',
-                                                        transition: 'border-color 0.2s'
-                                                    }}
-                                                    onFocus={(e) => {
-                                                        e.target.style.borderColor = '#007bff';
-                                                    }}
-                                                    onBlur={(e) => {
-                                                        e.target.style.borderColor = '#e9ecef';
+                                                        backgroundColor: '#ffffff'
                                                     }}
                                                 >
                                                     <option value="date_range">Date Range</option>
@@ -1004,15 +1259,16 @@ const SaleAdmin = () => {
                                                 </select>
                                             </div>
 
-                                            {/* Date Range Fields - Only show when date_range is selected */}
-                                            {reportType === 'date_range' && (
+                                            {/* Date Range Fields */}
+                                            {reportType === 'date_range' ? (
                                                 <>
                                                     <div>
                                                         <label style={{
                                                             display: 'block',
-                                                            marginBottom: '8px',
-                                                            fontWeight: '500',
-                                                            color: '#333'
+                                                            marginBottom: '10px',
+                                                            fontWeight: '600',
+                                                            color: '#374151',
+                                                            fontSize: '14px'
                                                         }}>
                                                             From Date *
                                                         </label>
@@ -1022,17 +1278,10 @@ const SaleAdmin = () => {
                                                             onChange={(e) => setReportDateFrom(e.target.value)}
                                                             style={{
                                                                 width: '100%',
-                                                                padding: '12px',
-                                                                border: '2px solid #e9ecef',
-                                                                borderRadius: '8px',
-                                                                fontSize: '14px',
-                                                                transition: 'border-color 0.2s'
-                                                            }}
-                                                            onFocus={(e) => {
-                                                                e.target.style.borderColor = '#007bff';
-                                                            }}
-                                                            onBlur={(e) => {
-                                                                e.target.style.borderColor = '#e9ecef';
+                                                                padding: '12px 16px',
+                                                                border: '2px solid #e5e7eb',
+                                                                borderRadius: '10px',
+                                                                fontSize: '14px'
                                                             }}
                                                         />
                                                     </div>
@@ -1040,9 +1289,10 @@ const SaleAdmin = () => {
                                                     <div>
                                                         <label style={{
                                                             display: 'block',
-                                                            marginBottom: '8px',
-                                                            fontWeight: '500',
-                                                            color: '#333'
+                                                            marginBottom: '10px',
+                                                            fontWeight: '600',
+                                                            color: '#374151',
+                                                            fontSize: '14px'
                                                         }}>
                                                             To Date *
                                                         </label>
@@ -1052,31 +1302,22 @@ const SaleAdmin = () => {
                                                             onChange={(e) => setReportDateTo(e.target.value)}
                                                             style={{
                                                                 width: '100%',
-                                                                padding: '12px',
-                                                                border: '2px solid #e9ecef',
-                                                                borderRadius: '8px',
-                                                                fontSize: '14px',
-                                                                transition: 'border-color 0.2s'
-                                                            }}
-                                                            onFocus={(e) => {
-                                                                e.target.style.borderColor = '#007bff';
-                                                            }}
-                                                            onBlur={(e) => {
-                                                                e.target.style.borderColor = '#e9ecef';
+                                                                padding: '12px 16px',
+                                                                border: '2px solid #e5e7eb',
+                                                                borderRadius: '10px',
+                                                                fontSize: '14px'
                                                             }}
                                                         />
                                                     </div>
                                                 </>
-                                            )}
-
-                                            {/* Monthly Selection - Only show when monthly is selected */}
-                                            {reportType === 'monthly' && (
+                                            ) : (
                                                 <div>
                                                     <label style={{
                                                         display: 'block',
-                                                        marginBottom: '8px',
-                                                        fontWeight: '500',
-                                                        color: '#333'
+                                                        marginBottom: '10px',
+                                                        fontWeight: '600',
+                                                        color: '#374151',
+                                                        fontSize: '14px'
                                                     }}>
                                                         Select Month *
                                                     </label>
@@ -1086,48 +1327,35 @@ const SaleAdmin = () => {
                                                         onChange={(e) => setReportMonth(e.target.value)}
                                                         style={{
                                                             width: '100%',
-                                                            padding: '12px',
-                                                            border: '2px solid #e9ecef',
-                                                            borderRadius: '8px',
-                                                            fontSize: '14px',
-                                                            transition: 'border-color 0.2s'
-                                                        }}
-                                                        onFocus={(e) => {
-                                                            e.target.style.borderColor = '#007bff';
-                                                        }}
-                                                        onBlur={(e) => {
-                                                            e.target.style.borderColor = '#e9ecef';
+                                                            padding: '12px 16px',
+                                                            border: '2px solid #e5e7eb',
+                                                            borderRadius: '10px',
+                                                            fontSize: '14px'
                                                         }}
                                                     />
                                                 </div>
                                             )}
 
-                                            {/* Location Filter - Always show */}
+                                            {/* Location Filter */}
                                             <div>
                                                 <label style={{
                                                     display: 'block',
-                                                    marginBottom: '8px',
-                                                    fontWeight: '500',
-                                                    color: '#333'
+                                                    marginBottom: '10px',
+                                                    fontWeight: '600',
+                                                    color: '#374151',
+                                                    fontSize: '14px'
                                                 }}>
-                                                    Location
+                                                    Location Filter
                                                 </label>
                                                 <select
                                                     value={reportLocationFilter}
                                                     onChange={(e) => setReportLocationFilter(e.target.value)}
                                                     style={{
                                                         width: '100%',
-                                                        padding: '12px',
-                                                        border: '2px solid #e9ecef',
-                                                        borderRadius: '8px',
-                                                        fontSize: '14px',
-                                                        transition: 'border-color 0.2s'
-                                                    }}
-                                                    onFocus={(e) => {
-                                                        e.target.style.borderColor = '#007bff';
-                                                    }}
-                                                    onBlur={(e) => {
-                                                        e.target.style.borderColor = '#e9ecef';
+                                                        padding: '12px 16px',
+                                                        border: '2px solid #e5e7eb',
+                                                        borderRadius: '10px',
+                                                        fontSize: '14px'
                                                     }}
                                                 >
                                                     <option value="">All Locations</option>
@@ -1138,12 +1366,43 @@ const SaleAdmin = () => {
                                                     ))}
                                                 </select>
                                             </div>
+
+                                            {/* Sales Type Filter */}
+                                            <div>
+                                                <label style={{
+                                                    display: 'block',
+                                                    marginBottom: '10px',
+                                                    fontWeight: '600',
+                                                    color: '#374151',
+                                                    fontSize: '14px'
+                                                }}>
+                                                    Sales Type Filter
+                                                </label>
+                                                <select
+                                                    value={reportSalesTypeFilter}
+                                                    onChange={(e) => setReportSalesTypeFilter(e.target.value)}
+                                                    style={{
+                                                        width: '100%',
+                                                        padding: '12px 16px',
+                                                        border: '2px solid #e5e7eb',
+                                                        borderRadius: '10px',
+                                                        fontSize: '14px'
+                                                    }}
+                                                >
+                                                    <option value="">All Sales Types</option>
+                                                    {salesTypeOptions.map((option) => (
+                                                        <option key={option.value} value={option.value}>
+                                                            {option.label}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
                                         </div>
 
                                         <div style={{
                                             display: 'flex',
                                             justifyContent: 'flex-end',
-                                            gap: '12px'
+                                            gap: '15px'
                                         }}>
                                             <button
                                                 onClick={() => {
@@ -1151,24 +1410,18 @@ const SaleAdmin = () => {
                                                     setReportDateFrom('');
                                                     setReportDateTo('');
                                                     setReportLocationFilter('');
+                                                    setReportSalesTypeFilter('');
                                                     setReportType('date_range');
                                                     setReportMonth('');
                                                 }}
                                                 style={{
                                                     padding: '12px 24px',
-                                                    backgroundColor: '#6c757d',
+                                                    backgroundColor: '#6b7280',
                                                     color: 'white',
                                                     border: 'none',
-                                                    borderRadius: '8px',
+                                                    borderRadius: '10px',
                                                     cursor: 'pointer',
-                                                    fontSize: '14px',
-                                                    fontWeight: '500'
-                                                }}
-                                                onMouseEnter={(e) => {
-                                                    e.target.style.backgroundColor = '#5a6268';
-                                                }}
-                                                onMouseLeave={(e) => {
-                                                    e.target.style.backgroundColor = '#6c757d';
+                                                    fontSize: '14px'
                                                 }}
                                             >
                                                 Cancel
@@ -1181,248 +1434,301 @@ const SaleAdmin = () => {
                                                     (reportType === 'monthly' && !reportMonth)
                                                 }
                                                 style={{
-                                                    padding: '12px 24px',
+                                                    padding: '12px 30px',
                                                     backgroundColor: (
                                                         (reportType === 'date_range' && (!reportDateFrom || !reportDateTo)) ||
                                                         (reportType === 'monthly' && !reportMonth)
-                                                    ) ? '#ccc' : '#28a745',
+                                                    ) ? '#d1d5db' : '#10b981',
                                                     color: 'white',
                                                     border: 'none',
-                                                    borderRadius: '8px',
+                                                    borderRadius: '10px',
                                                     cursor: (
                                                         (reportType === 'date_range' && (!reportDateFrom || !reportDateTo)) ||
                                                         (reportType === 'monthly' && !reportMonth)
                                                     ) ? 'not-allowed' : 'pointer',
                                                     fontSize: '14px',
-                                                    fontWeight: '500',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    gap: '8px'
-                                                }}
-                                                onMouseEnter={(e) => {
-                                                    if (
-                                                        (reportType === 'date_range' && reportDateFrom && reportDateTo) ||
-                                                        (reportType === 'monthly' && reportMonth)
-                                                    ) {
-                                                        e.target.style.backgroundColor = '#218838';
-                                                    }
-                                                }}
-                                                onMouseLeave={(e) => {
-                                                    if (
-                                                        (reportType === 'date_range' && reportDateFrom && reportDateTo) ||
-                                                        (reportType === 'monthly' && reportMonth)
-                                                    ) {
-                                                        e.target.style.backgroundColor = '#28a745';
-                                                    }
+                                                    fontWeight: '600'
                                                 }}
                                             >
-                                                {isGeneratingReport ? (
-                                                    <>
-                                                        <div style={{
-                                                            width: '16px',
-                                                            height: '16px',
-                                                            border: '2px solid transparent',
-                                                            borderTop: '2px solid white',
-                                                            borderRadius: '50%',
-                                                            animation: 'spin 1s linear infinite'
-                                                        }}></div>
-                                                        Generating...
-                                                    </>
-                                                ) : (
-                                                    'Generate Report'
-                                                )}
+                                                {isGeneratingReport ? 'Generating...' : 'Generate Report'}
                                             </button>
                                         </div>
                                     </div>
                                 ) : (
                                     // Report Display
                                     <div>
-                                        {/* Report Header */}
                                         <div style={{
                                             textAlign: 'center',
-                                            marginBottom: '30px',
-                                            paddingBottom: '20px',
-                                            borderBottom: '2px solid #007bff'
+                                            marginBottom: '35px',
+                                            paddingBottom: '25px',
+                                            borderBottom: '3px solid #667eea'
                                         }}>
                                             <h2 style={{
-                                                margin: '0 0 10px 0',
-                                                color: '#333',
-                                                fontSize: '24px'
+                                                margin: '0 0 15px 0',
+                                                color: '#1f2937',
+                                                fontSize: '28px',
+                                                fontWeight: '700'
                                             }}>
-                                                Sales Report
+                                                Sales Analytics Report
                                             </h2>
-                                            <p style={{
-                                                margin: '0 0 5px 0',
-                                                color: '#6c757d',
-                                                fontSize: '16px'
+                                            <div style={{
+                                                display: 'flex',
+                                                justifyContent: 'center',
+                                                gap: '30px',
+                                                flexWrap: 'wrap'
                                             }}>
-                                                {reportData.reportType === 'monthly'
-                                                    ? `Month: ${new Date(reportData.dateRange.from).toLocaleDateString('en-US', { year: 'numeric', month: 'long' })}`
-                                                    : `Period: ${new Date(reportData.dateRange.from).toLocaleDateString()} - ${new Date(reportData.dateRange.to).toLocaleDateString()}`
-                                                }
-                                            </p>
-                                            <p style={{
-                                                margin: 0,
-                                                color: '#007bff',
-                                                fontSize: '14px',
-                                                fontWeight: '500'
-                                            }}>
-                                                Location: {reportLocationFilter
-                                                    ? locationList.find(loc => loc.location_id === reportLocationFilter)?.location_name || 'Selected Location'
-                                                    : 'All Locations'
-                                                }
-                                            </p>
+                                                <div style={{
+                                                    padding: '8px 16px',
+                                                    backgroundColor: '#dbeafe',
+                                                    color: '#1e40af',
+                                                    borderRadius: '20px',
+                                                    fontSize: '14px',
+                                                    fontWeight: '500'
+                                                }}>
+                                                    {reportData.reportType === 'monthly'
+                                                        ? `Month: ${new Date(reportData.dateRange.from).toLocaleDateString('en-US', { year: 'numeric', month: 'long' })}`
+                                                        : `Period: ${new Date(reportData.dateRange.from).toLocaleDateString()} - ${new Date(reportData.dateRange.to).toLocaleDateString()}`
+                                                    }
+                                                </div>
+                                                <div style={{
+                                                    padding: '8px 16px',
+                                                    backgroundColor: '#dcfce7',
+                                                    color: '#166534',
+                                                    borderRadius: '20px',
+                                                    fontSize: '14px',
+                                                    fontWeight: '500'
+                                                }}>
+                                                    Location: {reportLocationFilter
+                                                        ? locationList.find(loc => loc.location_id === reportLocationFilter)?.location_name || 'Selected Location'
+                                                        : 'All Locations'
+                                                    }
+                                                </div>
+                                                <div style={{
+                                                    padding: '8px 16px',
+                                                    backgroundColor: '#fef3c7',
+                                                    color: '#92400e',
+                                                    borderRadius: '20px',
+                                                    fontSize: '14px',
+                                                    fontWeight: '500'
+                                                }}>
+                                                    Sales Type: {reportData.salesTypeFilter || 'All Sales Types'}
+                                                </div>
+                                            </div>
                                         </div>
 
-                                        {/* Summary Section */}
                                         <div style={{
-                                            backgroundColor: '#f8f9fa',
-                                            padding: '20px',
-                                            borderRadius: '12px',
-                                            marginBottom: '30px',
-                                            borderLeft: '4px solid #28a745'
+                                            background: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)',
+                                            padding: '25px',
+                                            borderRadius: '16px',
+                                            marginBottom: '35px',
+                                            border: '1px solid #e2e8f0'
                                         }}>
                                             <h3 style={{
-                                                margin: '0 0 15px 0',
-                                                color: '#28a745',
-                                                fontSize: '18px'
+                                                margin: '0 0 20px 0',
+                                                color: '#1f2937',
+                                                fontSize: '20px',
+                                                fontWeight: '600'
                                             }}>
-                                                Summary
+                                                Executive Summary
                                             </h3>
                                             <div style={{
                                                 display: 'grid',
                                                 gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                                                gap: '15px'
+                                                gap: '20px'
                                             }}>
-                                                <div>
-                                                    <strong style={{ fontSize: '16px', color: '#333' }}>Total Sales:</strong>
-                                                    <div style={{ fontSize: '20px', color: '#28a745', fontWeight: 'bold' }}>
+                                                <div style={{
+                                                    padding: '20px',
+                                                    backgroundColor: 'white',
+                                                    borderRadius: '12px',
+                                                    textAlign: 'center',
+                                                    boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                                                }}>
+                                                    <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '5px' }}>Total Sales</div>
+                                                    <div style={{ fontSize: '24px', color: '#059669', fontWeight: 'bold' }}>
                                                         ₱{reportData.totalSales.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                     </div>
                                                 </div>
-                                                <div>
-                                                    <strong style={{ fontSize: '16px', color: '#333' }}>Total Transactions:</strong>
-                                                    <div style={{ fontSize: '20px', color: '#007bff', fontWeight: 'bold' }}>
+                                                <div style={{
+                                                    padding: '20px',
+                                                    backgroundColor: 'white',
+                                                    borderRadius: '12px',
+                                                    textAlign: 'center',
+                                                    boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                                                }}>
+                                                    <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '5px' }}>Transactions</div>
+                                                    <div style={{ fontSize: '24px', color: '#3b82f6', fontWeight: 'bold' }}>
                                                         {reportData.totalTransactions}
                                                     </div>
                                                 </div>
-                                                <div>
-                                                    <strong style={{ fontSize: '16px', color: '#333' }}>Average Transaction:</strong>
-                                                    <div style={{ fontSize: '20px', color: '#6f42c1', fontWeight: 'bold' }}>
+                                                <div style={{
+                                                    padding: '20px',
+                                                    backgroundColor: 'white',
+                                                    borderRadius: '12px',
+                                                    textAlign: 'center',
+                                                    boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                                                }}>
+                                                    <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '5px' }}>Average Sale</div>
+                                                    <div style={{ fontSize: '24px', color: '#8b5cf6', fontWeight: 'bold' }}>
                                                         ₱{reportData.totalTransactions > 0 ? (reportData.totalSales / reportData.totalTransactions).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
                                                     </div>
                                                 </div>
                                             </div>
                                         </div>
 
-                                        {/* Grouped Data */}
                                         {reportData.grouped.map((group, index) => (
                                             <div key={index} style={{
-                                                marginBottom: '25px',
-                                                border: '1px solid #dee2e6',
-                                                borderRadius: '12px',
-                                                overflow: 'hidden'
+                                                marginBottom: '30px',
+                                                border: '1px solid #e5e7eb',
+                                                borderRadius: '16px',
+                                                overflow: 'hidden',
+                                                boxShadow: '0 4px 6px rgba(0, 0, 0, 0.05)'
                                             }}>
                                                 <div style={{
-                                                    backgroundColor: '#007bff',
+                                                    background: group.salesFrom === 'Full Payment Sales' 
+                                                        ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)'
+                                                        : group.salesFrom === 'Installment Sales'
+                                                        ? 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)'
+                                                        : 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)',
                                                     color: 'white',
-                                                    padding: '15px',
-                                                    fontWeight: 'bold',
-                                                    fontSize: '16px'
+                                                    padding: '20px',
+                                                    display: 'flex',
+                                                    justifyContent: 'space-between',
+                                                    alignItems: 'center'
                                                 }}>
-                                                    {group.location} - {group.salesFrom}
-                                                </div>
-                                                <div style={{ padding: '15px' }}>
-                                                    <div style={{
-                                                        display: 'flex',
-                                                        justifyContent: 'space-between',
-                                                        marginBottom: '15px',
-                                                        padding: '10px',
-                                                        backgroundColor: '#f8f9fa',
-                                                        borderRadius: '8px'
-                                                    }}>
-                                                        <span><strong>Total Sales:</strong> ₱{group.totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                                                        <span><strong>Transactions:</strong> {group.totalTransactions}</span>
+                                                    <div>
+                                                        <h4 style={{ margin: '0 0 5px 0', fontSize: '18px', fontWeight: '600' }}>
+                                                            {group.location} - {group.salesFrom}
+                                                        </h4>
+                                                        <div style={{ fontSize: '14px', opacity: 0.9 }}>
+                                                            {group.totalTransactions} transactions
+                                                        </div>
                                                     </div>
-
-                                                    <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                                                    <div style={{ textAlign: 'right' }}>
+                                                        <div style={{ fontSize: '24px', fontWeight: 'bold' }}>
+                                                            ₱{group.totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div style={{ padding: '20px' }}>
+                                                    <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
                                                         <table style={{
                                                             width: '100%',
                                                             borderCollapse: 'collapse',
                                                             fontSize: '14px'
                                                         }}>
-                                                            <thead>
-                                                                <tr style={{ backgroundColor: '#f8f9fa' }}>
+                                                            <thead style={{ position: 'sticky', top: 0, backgroundColor: '#f8fafc' }}>
+                                                                <tr>
                                                                     <th style={{
-                                                                        border: '1px solid #dee2e6',
-                                                                        padding: '8px',
+                                                                        border: '1px solid #e5e7eb',
+                                                                        padding: '12px',
                                                                         textAlign: 'left',
-                                                                        fontWeight: '600'
+                                                                        fontWeight: '600',
+                                                                        color: '#374151',
+                                                                        backgroundColor: '#f8fafc'
                                                                     }}>Invoice #</th>
                                                                     <th style={{
-                                                                        border: '1px solid #dee2e6',
-                                                                        padding: '8px',
+                                                                        border: '1px solid #e5e7eb',
+                                                                        padding: '12px',
                                                                         textAlign: 'left',
-                                                                        fontWeight: '600'
+                                                                        fontWeight: '600',
+                                                                        color: '#374151',
+                                                                        backgroundColor: '#f8fafc'
                                                                     }}>Date</th>
                                                                     <th style={{
-                                                                        border: '1px solid #dee2e6',
-                                                                        padding: '8px',
+                                                                        border: '1px solid #e5e7eb',
+                                                                        padding: '12px',
                                                                         textAlign: 'left',
-                                                                        fontWeight: '600'
+                                                                        fontWeight: '600',
+                                                                        color: '#374151',
+                                                                        backgroundColor: '#f8fafc'
                                                                     }}>Time</th>
                                                                     <th style={{
-                                                                        border: '1px solid #dee2e6',
-                                                                        padding: '8px',
+                                                                        border: '1px solid #e5e7eb',
+                                                                        padding: '12px',
                                                                         textAlign: 'left',
-                                                                        fontWeight: '600'
+                                                                        fontWeight: '600',
+                                                                        color: '#374151',
+                                                                        backgroundColor: '#f8fafc'
                                                                     }}>Sale Type</th>
                                                                     <th style={{
-                                                                        border: '1px solid #dee2e6',
-                                                                        padding: '8px',
+                                                                        border: '1px solid #e5e7eb',
+                                                                        padding: '12px',
                                                                         textAlign: 'right',
-                                                                        fontWeight: '600'
+                                                                        fontWeight: '600',
+                                                                        color: '#374151',
+                                                                        backgroundColor: '#f8fafc'
                                                                     }}>Amount</th>
                                                                 </tr>
                                                             </thead>
                                                             <tbody>
                                                                 {group.transactions.map((transaction, tIndex) => (
-                                                                    <tr key={tIndex}>
-                                                                        <td style={{ border: '1px solid #dee2e6', padding: '8px' }}>
+                                                                    <tr key={tIndex} style={{
+                                                                        borderBottom: '1px solid #f3f4f6'
+                                                                    }}>
+                                                                        <td style={{ 
+                                                                            border: '1px solid #e5e7eb', 
+                                                                            padding: '12px',
+                                                                            fontWeight: '500'
+                                                                        }}>
                                                                             {transaction.invoice_id}
                                                                         </td>
-                                                                        <td style={{ border: '1px solid #dee2e6', padding: '8px' }}>
-                                                                            {transaction.date}
+                                                                        <td style={{ border: '1px solid #e5e7eb', padding: '12px' }}>
+                                                                            {new Date(transaction.date).toLocaleDateString()}
                                                                         </td>
-                                                                        <td style={{ border: '1px solid #dee2e6', padding: '8px' }}>
+                                                                        <td style={{ 
+                                                                            border: '1px solid #e5e7eb', 
+                                                                            padding: '12px',
+                                                                            fontFamily: 'monospace'
+                                                                        }}>
                                                                             {transaction.time}
                                                                         </td>
-                                                                        <td style={{ border: '1px solid #dee2e6', padding: '8px' }}>
-                                                                            {transaction.sales_from || 'N/A'}
+                                                                        <td style={{ border: '1px solid #e5e7eb', padding: '12px' }}>
+                                                                            <span style={{
+                                                                                padding: '3px 8px',
+                                                                                borderRadius: '12px',
+                                                                                fontSize: '12px',
+                                                                                fontWeight: '500',
+                                                                                backgroundColor: categorizeSalesType(transaction.sales_from) === 'Full Payment Sales' 
+                                                                                    ? '#dcfce7' 
+                                                                                    : categorizeSalesType(transaction.sales_from) === 'Installment Sales'
+                                                                                    ? '#dbeafe'
+                                                                                    : '#f3f4f6',
+                                                                                color: categorizeSalesType(transaction.sales_from) === 'Full Payment Sales'
+                                                                                    ? '#166534'
+                                                                                    : categorizeSalesType(transaction.sales_from) === 'Installment Sales'
+                                                                                    ? '#1e40af'
+                                                                                    : '#374151'
+                                                                            }}>
+                                                                                {transaction.sales_from || 'N/A'}
+                                                                            </span>
                                                                         </td>
                                                                         <td style={{
-                                                                            border: '1px solid #dee2e6',
-                                                                            padding: '8px',
-                                                                            textAlign: 'right'
+                                                                            border: '1px solid #e5e7eb',
+                                                                            padding: '12px',
+                                                                            textAlign: 'right',
+                                                                            fontWeight: '600',
+                                                                            color: '#059669'
                                                                         }}>
                                                                             ₱{parseFloat(transaction.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                                         </td>
                                                                     </tr>
                                                                 ))}
                                                                 <tr style={{
-                                                                    backgroundColor: '#e8f5e8',
+                                                                    backgroundColor: '#f0fdf4',
                                                                     fontWeight: 'bold'
                                                                 }}>
                                                                     <td colSpan="4" style={{
-                                                                        border: '1px solid #dee2e6',
-                                                                        padding: '8px'
+                                                                        border: '1px solid #e5e7eb',
+                                                                        padding: '12px',
+                                                                        color: '#166534'
                                                                     }}>
                                                                         Subtotal
                                                                     </td>
                                                                     <td style={{
-                                                                        border: '1px solid #dee2e6',
-                                                                        padding: '8px',
-                                                                        textAlign: 'right'
+                                                                        border: '1px solid #e5e7eb',
+                                                                        padding: '12px',
+                                                                        textAlign: 'right',
+                                                                        color: '#166534'
                                                                     }}>
                                                                         ₱{group.totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                                     </td>
@@ -1437,12 +1743,29 @@ const SaleAdmin = () => {
                                         {reportData.grouped.length === 0 && (
                                             <div style={{
                                                 textAlign: 'center',
-                                                padding: '40px',
-                                                color: '#6c757d'
+                                                padding: '60px 40px',
+                                                color: '#6b7280',
+                                                backgroundColor: '#f9fafb',
+                                                borderRadius: '16px',
+                                                border: '2px dashed #d1d5db'
                                             }}>
-                                                <div style={{ fontSize: '48px', marginBottom: '20px' }}>📋</div>
-                                                <h4>No sales data found</h4>
-                                                <p>There are no sales records for the selected date range and location.</p>
+                                                <div style={{ 
+                                                    fontSize: '64px', 
+                                                    marginBottom: '20px',
+                                                    opacity: 0.5 
+                                                }}>📋</div>
+                                                <h4 style={{ 
+                                                    color: '#374151',
+                                                    marginBottom: '12px',
+                                                    fontSize: '20px'
+                                                }}>No Data Found</h4>
+                                                <p style={{ 
+                                                    margin: 0,
+                                                    fontSize: '16px',
+                                                    lineHeight: '1.5'
+                                                }}>
+                                                    No sales records match the selected criteria. Try adjusting your filters or date range.
+                                                </p>
                                             </div>
                                         )}
                                     </div>
@@ -1452,38 +1775,42 @@ const SaleAdmin = () => {
                             {/* Modal Footer */}
                             {reportData.sales && (
                                 <div style={{
-                                    padding: '20px',
-                                    backgroundColor: '#f8f9fa',
-                                    borderTop: '1px solid #dee2e6',
+                                    padding: '25px 30px',
+                                    backgroundColor: '#f8fafc',
+                                    borderTop: '1px solid #e5e7eb',
                                     display: 'flex',
                                     justifyContent: 'space-between',
                                     alignItems: 'center'
                                 }}>
-                                    <div style={{ color: '#6c757d', fontSize: '14px' }}>
-                                        Generated on: {new Date().toLocaleString()}
+                                    <div style={{ 
+                                        color: '#6b7280', 
+                                        fontSize: '14px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '8px'
+                                    }}>
+                                        Generated: {new Date().toLocaleString()}
                                     </div>
 
-                                    <div style={{ display: 'flex', gap: '12px' }}>
+                                    <div style={{ display: 'flex', gap: '15px' }}>
                                         <button
                                             onClick={() => {
                                                 setReportData([]);
                                                 setReportDateFrom('');
                                                 setReportDateTo('');
                                                 setReportLocationFilter('');
+                                                setReportSalesTypeFilter('');
                                                 setReportType('date_range');
                                                 setReportMonth('');
                                             }}
                                             style={{
-                                                padding: '10px 20px',
-                                                backgroundColor: '#6c757d',
+                                                padding: '12px 20px',
+                                                backgroundColor: '#6b7280',
                                                 color: 'white',
                                                 border: 'none',
-                                                borderRadius: '8px',
+                                                borderRadius: '10px',
                                                 cursor: 'pointer',
                                                 fontSize: '14px'
-                                            }}
-                                            onMouseLeave={(e) => {
-                                                e.target.style.backgroundColor = '#6c757d';
                                             }}
                                         >
                                             Generate New Report
@@ -1492,25 +1819,17 @@ const SaleAdmin = () => {
                                         <button
                                             onClick={printReport}
                                             style={{
-                                                padding: '10px 20px',
-                                                backgroundColor: '#28a745',
+                                                padding: '12px 24px',
+                                                background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
                                                 color: 'white',
                                                 border: 'none',
-                                                borderRadius: '8px',
+                                                borderRadius: '10px',
                                                 cursor: 'pointer',
                                                 fontSize: '14px',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: '8px'
-                                            }}
-                                            onMouseEnter={(e) => {
-                                                e.target.style.backgroundColor = '#218838';
-                                            }}
-                                            onMouseLeave={(e) => {
-                                                e.target.style.backgroundColor = '#28a745';
+                                                fontWeight: '600'
                                             }}
                                         >
-                                            🖨️ Print Report
+                                            Print Report
                                         </button>
                                     </div>
                                 </div>
@@ -1520,7 +1839,6 @@ const SaleAdmin = () => {
                 )}
             </div>
 
-            {/* Add CSS for spinner animation */}
             <style jsx>{`
                 @keyframes spin {
                     0% { transform: rotate(0deg); }
@@ -1532,4 +1850,3 @@ const SaleAdmin = () => {
 }
 
 export default SaleAdmin;
-

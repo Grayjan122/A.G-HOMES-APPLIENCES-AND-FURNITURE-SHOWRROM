@@ -1473,36 +1473,7 @@ export default function SalePage() {
                 {paymentPlan !== 'installment' && (
                   <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '16px', marginBottom: '16px' }}>
                     <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '8px' }}>Discount</label>
-                    <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
-                      <button
-                        onClick={() => setDiscountType('percentage')}
-                        style={{
-                          flex: 1,
-                          padding: '8px',
-                          borderRadius: '8px',
-                          border: 'none',
-                          background: discountType === 'percentage' ? '#7c3aed' : '#f3f4f6',
-                          color: discountType === 'percentage' ? 'white' : 'black',
-                          cursor: 'pointer'
-                        }}
-                      >
-                        Percentage %
-                      </button>
-                      <button
-                        onClick={() => setDiscountType('fixed')}
-                        style={{
-                          flex: 1,
-                          padding: '8px',
-                          borderRadius: '8px',
-                          border: 'none',
-                          background: discountType === 'fixed' ? '#7c3aed' : '#f3f4f6',
-                          color: discountType === 'fixed' ? 'white' : 'black',
-                          cursor: 'pointer'
-                        }}
-                      >
-                        Fixed ₱
-                      </button>
-                    </div>
+                    
                     <input
                       type="number"
                       value={discountValue || ''}
