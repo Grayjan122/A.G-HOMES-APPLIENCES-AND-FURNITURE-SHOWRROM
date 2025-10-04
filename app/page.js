@@ -153,7 +153,7 @@ export default function LoginPage() {
 
     sessionStorage.setItem('loginSuccess', 'true');
     sessionStorage.setItem('baseURL', 'http://localhost/capstone-api/api/');
-    // sessionStorage.setItem('baseURL', 'http://192.168.1.12//capstone-api/api/');
+    // sessionStorage.setItem('baseURL', 'http://192.168.137.144//capstone-api/api/');
 
 
     const correctAnswer = num1 + num2;

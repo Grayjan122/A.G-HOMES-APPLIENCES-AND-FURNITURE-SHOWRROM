@@ -10,7 +10,7 @@ import CustomPagination from '@/app/Components/Pagination/pagination';
 import { AlertSucces } from '@/app/Components/SweetAlert/success';
 import { showAlertError } from '@/app/Components/SweetAlert/error';
 
-const ITEMS_PER_PAGE = 8;
+const ITEMS_PER_PAGE = 9;
 const ITEMS_PER_PAGE1 = 5;
 
 const DeliveryAdmin = () => {
@@ -40,7 +40,6 @@ const DeliveryAdmin = () => {
             try {
                 const filterConfig = JSON.parse(savedFilter);
                 
-                // Apply the filters from dashboard
                 if (filterConfig.statusFilter) {
                     setStatusFilter(filterConfig.statusFilter);
                 }
@@ -54,42 +53,35 @@ const DeliveryAdmin = () => {
                     setSearchFilter(filterConfig.searchFilter);
                 }
                 
-                // Clear the saved filter to prevent it from being applied again
                 sessionStorage.removeItem('deliveryPageFilter');
             } catch (error) {
                 console.error('Error parsing delivery filter config:', error);
                 sessionStorage.removeItem('deliveryPageFilter');
             }
         }
-    }, []); // Run once on component mount
+    }, []);
    
     
-    // Apply filters to the data - FIXED VERSION
+    // Apply filters to the data
     const filteredData = useMemo(() => {
         let filtered = [...requestList1];
 
-        // Filter by deliver to location - FIXED: Convert both to strings for comparison
         if (deliverToFilter) {
             filtered = filtered.filter(item => {
-                // Handle both cases where location_id might be string or number
                 return item.request_from?.toString() == deliverToFilter.toString();
             });
         }
 
-        // Filter by driver - FIXED: Compare driver_id properly
         if (driverFilter) {
             filtered = filtered.filter(item => {
-                // Check if the item has driver_id and compare it
                 return item.account_id?.toString() === driverFilter.toString();
             });
         }
 
-        // Filter by status
         if (statusFilter) {
             filtered = filtered.filter(item => item.delivery_status === statusFilter);
         }
 
-        // Filter by search term
         if (searchFilter.trim()) {
             const searchTerm = searchFilter.toLowerCase();
             filtered = filtered.filter(item =>
@@ -205,7 +197,6 @@ const DeliveryAdmin = () => {
             });
             setRequestList1(response.data);
             
-            // DEBUG: Log the data structure to console
             console.log("Request data:", response.data);
             if (response.data && response.data.length > 0) {
                 console.log("Sample item structure:", response.data[0]);
@@ -305,7 +296,6 @@ const DeliveryAdmin = () => {
             });
             setUserList(response.data);
             
-            // DEBUG: Log the user data structure
             console.log("User data:", response.data);
             if (response.data && response.data.length > 0) {
                 console.log("Sample user structure:", response.data[0]);
@@ -370,7 +360,6 @@ const DeliveryAdmin = () => {
         }
     };
 
-    // Clear all filters function
     const clearAllFilters = () => {
         setDeliverToFilter('');
         setDriverFilter('');
@@ -379,13 +368,11 @@ const DeliveryAdmin = () => {
         setCurrentPage1(1);
     };
 
-    // Get location name by ID
     const getLocationName = (id) => {
         const location = locationList.find(loc => loc.location_id?.toString() === id?.toString());
         return location ? location.location_name : '';
     };
 
-    // Get driver name by ID
     const getDriverName = (id) => {
         const driver = userList.find(user => user.account_id?.toString() === id?.toString());
         return driver ? `${driver.fname || ''} ${driver.mname || ''} ${driver.lname || ''}` : '';
@@ -458,17 +445,6 @@ const DeliveryAdmin = () => {
                     <Button variant="secondary" onClick={() => { setDeliveriesDataVisible(true); }}>
                         Close
                     </Button>
-                    {/* {requestStatus === 'Delivered' && (
-                        <Button
-                            variant="primary"
-                            onClick={() => {
-                                setDeliveriesDataVisible(true);
-                                MarkComplete();
-                            }}
-                        >
-                            Mark Complete
-                        </Button>
-                    )} */}
                 </Modal.Footer>
             </Modal>
 
@@ -677,7 +653,9 @@ const DeliveryAdmin = () => {
                     fontSize: '14px',
                     display: 'flex', 
                     justifyContent: 'space-between', 
-                    alignItems: 'center'
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: '10px'
                 }}>
                     <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
                         <strong>Active Filters:</strong>
@@ -719,19 +697,9 @@ const DeliveryAdmin = () => {
                                         e.target.style.backgroundColor = 'transparent';
                                         e.target.style.color = '#6c757d';
                                     }}
-                                    title="Remove search filter"
+                                    title="Remove filter"
                                 >
-                                    <svg
-                                        width="12"
-                                        height="12"
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth="2"
-                                    >
-                                        <line x1="18" y1="6" x2="6" y2="18"></line>
-                                        <line x1="6" y1="6" x2="18" y2="18"></line>
-                                    </svg>
+                                    ×
                                 </button>
                             </span>
                         )}
@@ -775,17 +743,7 @@ const DeliveryAdmin = () => {
                                     }}
                                     title="Remove driver filter"
                                 >
-                                    <svg
-                                        width="12"
-                                        height="12"
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth="2"
-                                    >
-                                        <line x1="18" y1="6" x2="6" y2="18"></line>
-                                        <line x1="6" y1="6" x2="18" y2="18"></line>
-                                    </svg>
+                                    ×
                                 </button>
                             </span>
                         )}
@@ -829,19 +787,13 @@ const DeliveryAdmin = () => {
                                     }}
                                     title="Remove status filter"
                                 >
-                                    <svg
-                                        width="12"
-                                        height="12"
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth="2"
-                                    >
-                                        <line x1="18" y1="6" x2="6" y2="18"></line>
-                                        <line x1="6" y1="6" x2="18" y2="18"></line>
-                                    </svg>
+                                    ×
                                 </button>
                             </span>
+                        )}
+
+                        {!deliverToFilter && !driverFilter && !statusFilter && !searchFilter && (
+                            <span style={{ color: '#6c757d' }}>None</span>
                         )}
                         
                         <span style={{ marginLeft: '10px', color: '#6c757d' }}>
@@ -874,57 +826,270 @@ const DeliveryAdmin = () => {
                     </div>
                 </div>
 
-                <div className='tableContainer' style={{ height: '45vh', overflowY: 'auto' }}>
+                {/* Delivery Cards Grid */}
+                <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+                    gap: '20px',
+                    padding: '10px 0',
+                    minHeight: '400px'
+                }}>
                     {currentItems1 && currentItems1.length > 0 ? (
-                        <table className='table'>
-                            <thead>
-                                <tr>
-                                    <th className='t2'>REQUEST ID</th>
-                                    <th className='t2'>DELIVER TO</th>
-                                    <th className='t2'>DRIVER</th>
-                                    <th className='th1'>STATUS</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {currentItems1.map((p, i) => (
-                                    <tr className='table-row' key={i} onClick={() => {
-                                        setDeliveriesDataVisible(false);
-                                        GetDeliveriesData(p.request_stock_id);
-                                        GetDeliveriesDetails(p.request_stock_id);
+                        currentItems1.map((delivery, i) => (
+                            <div
+                                key={i}
+                                onClick={() => {
+                                    setDeliveriesDataVisible(false);
+                                    GetDeliveriesData(delivery.request_stock_id);
+                                    GetDeliveriesDetails(delivery.request_stock_id);
+                                }}
+                                style={{
+                                    backgroundColor: '#ffffff',
+                                    borderRadius: '12px',
+                                    padding: '20px',
+                                    boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                                    border: '1px solid #e9ecef',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.3s ease',
+                                    position: 'relative',
+                                    overflow: 'hidden'
+                                }}
+                                onMouseEnter={(e) => {
+                                    e.currentTarget.style.transform = 'translateY(-4px)';
+                                    e.currentTarget.style.boxShadow = '0 8px 16px rgba(255, 152, 0, 0.15)';
+                                    e.currentTarget.style.borderColor = '#ff9800';
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.currentTarget.style.transform = 'translateY(0)';
+                                    e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.08)';
+                                    e.currentTarget.style.borderColor = '#e9ecef';
+                                }}
+                            >
+                                {/* Status Color Bar */}
+                                <div style={{
+                                    position: 'absolute',
+                                    top: 0,
+                                    left: 0,
+                                    right: 0,
+                                    height: '4px',
+                                    background: delivery.delivery_status === "Delivered"
+                                        ? 'linear-gradient(90deg, #28a745 0%, #20c997 100%)'
+                                        : 'linear-gradient(90deg, #ffc107 0%, #ff9800 100%)'
+                                }}></div>
+
+                                {/* Request ID Badge */}
+                                <div style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    marginBottom: '15px'
+                                }}>
+                                    <div style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '10px'
                                     }}>
-                                        <td className='td-name'>{p.request_stock_id}</td>
-                                        <td>{p.location_name}</td>
-                                        <td>{`${p.fname || ''} ${p.mname || ''} ${p.lname || ''}`}</td>
-                                        <td
-                                            style={{
-                                                textAlign: 'center',
-                                                fontWeight: 'bold',
-                                                color: p.delivery_status === "Delivered"
-                                                    ? "green"
-                                                    : p.delivery_status === "On Delivery"
-                                                        ? "goldenrod"
-                                                        : "black"
-                                            }}
-                                        >
-                                            {p.delivery_status}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                        <div style={{
+                                            width: '50px',
+                                            height: '50px',
+                                            borderRadius: '10px',
+                                            background: delivery.delivery_status === "Delivered"
+                                                ? 'linear-gradient(135deg, #28a745 0%, #20c997 100%)'
+                                                : 'linear-gradient(135deg, #ffc107 0%, #ff9800 100%)',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            color: 'white',
+                                            fontSize: '24px',
+                                            flexShrink: 0
+                                        }}>
+                                            🚚
+                                        </div>
+                                        <div>
+                                            <div style={{
+                                                fontSize: '11px',
+                                                color: '#6c757d',
+                                                marginBottom: '2px',
+                                                fontWeight: '500',
+                                                textTransform: 'uppercase',
+                                                letterSpacing: '0.5px'
+                                            }}>
+                                                Request ID
+                                            </div>
+                                            <div style={{
+                                                fontSize: '18px',
+                                                fontWeight: '700',
+                                                color: '#2c3e50'
+                                            }}>
+                                                #{delivery.request_stock_id}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Status Badge */}
+                                    <div style={{
+                                        padding: '6px 14px',
+                                        borderRadius: '20px',
+                                        fontSize: '12px',
+                                        fontWeight: '600',
+                                        backgroundColor: delivery.delivery_status === "Delivered"
+                                            ? '#d4edda'
+                                            : '#fff3cd',
+                                        color: delivery.delivery_status === "Delivered"
+                                            ? '#155724'
+                                            : '#856404',
+                                        border: `2px solid ${delivery.delivery_status === "Delivered" ? '#28a745' : '#ffc107'}`
+                                    }}>
+                                        {delivery.delivery_status}
+                                    </div>
+                                </div>
+
+                                {/* Delivery Details */}
+                                <div style={{ marginBottom: '15px' }}>
+                                    {/* Deliver To */}
+                                    <div style={{
+                                        display: 'flex',
+                                        alignItems: 'flex-start',
+                                        gap: '10px',
+                                        marginBottom: '12px',
+                                        padding: '10px',
+                                        backgroundColor: '#f8f9fa',
+                                        borderRadius: '8px'
+                                    }}>
+                                        <div style={{
+                                            color: '#ff9800',
+                                            marginTop: '2px',
+                                            flexShrink: 0
+                                        }}>
+                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+                                                <circle cx="12" cy="10" r="3"/>
+                                            </svg>
+                                        </div>
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                            <div style={{
+                                                fontSize: '11px',
+                                                color: '#6c757d',
+                                                marginBottom: '3px',
+                                                fontWeight: '600',
+                                                textTransform: 'uppercase',
+                                                letterSpacing: '0.5px'
+                                            }}>
+                                                Deliver To
+                                            </div>
+                                            <div style={{
+                                                fontSize: '15px',
+                                                color: '#2c3e50',
+                                                fontWeight: '600',
+                                                overflow: 'hidden',
+                                                textOverflow: 'ellipsis',
+                                                whiteSpace: 'nowrap'
+                                            }}>
+                                                {delivery.location_name}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Driver */}
+                                    <div style={{
+                                        display: 'flex',
+                                        alignItems: 'flex-start',
+                                        gap: '10px',
+                                        padding: '10px',
+                                        backgroundColor: '#f8f9fa',
+                                        borderRadius: '8px'
+                                    }}>
+                                        <div style={{
+                                            color: '#ff9800',
+                                            marginTop: '2px',
+                                            flexShrink: 0
+                                        }}>
+                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                                                <circle cx="12" cy="7" r="4"/>
+                                            </svg>
+                                        </div>
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                            <div style={{
+                                                fontSize: '11px',
+                                                color: '#6c757d',
+                                                marginBottom: '3px',
+                                                fontWeight: '600',
+                                                textTransform: 'uppercase',
+                                                letterSpacing: '0.5px'
+                                            }}>
+                                                Driver
+                                            </div>
+                                            <div style={{
+                                                fontSize: '15px',
+                                                color: '#2c3e50',
+                                                fontWeight: '600',
+                                                overflow: 'hidden',
+                                                textOverflow: 'ellipsis',
+                                                whiteSpace: 'nowrap'
+                                            }}>
+                                                {`${delivery.fname || ''} ${delivery.mname || ''} ${delivery.lname || ''}`.trim() || 'Not Assigned'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Card Footer */}
+                                <div style={{
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    paddingTop: '15px',
+                                    borderTop: '1px solid #e9ecef'
+                                }}>
+                                    <div style={{
+                                        fontSize: '12px',
+                                        color: '#6c757d',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '6px'
+                                    }}>
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                                            <line x1="16" y1="2" x2="16" y2="6"/>
+                                            <line x1="8" y1="2" x2="8" y2="6"/>
+                                            <line x1="3" y1="10" x2="21" y2="10"/>
+                                        </svg>
+                                        Click to view details
+                                    </div>
+
+                                    <div style={{
+                                        width: '36px',
+                                        height: '36px',
+                                        borderRadius: '50%',
+                                        border: '2px solid #ff9800',
+                                        backgroundColor: 'white',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        color: '#ff9800',
+                                        fontSize: '16px',
+                                        transition: 'all 0.2s'
+                                    }}>
+                                        →
+                                    </div>
+                                </div>
+                            </div>
+                        ))
                     ) : (
                         <div style={{
+                            gridColumn: '1 / -1',
                             display: 'flex',
                             flexDirection: 'column',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            height: '100%',
+                            minHeight: '400px',
                             textAlign: 'center',
                             color: '#6c757d',
                             padding: '40px 20px'
                         }}>
                             <div style={{
-                                fontSize: '48px',
+                                fontSize: '64px',
                                 marginBottom: '20px',
                                 opacity: 0.3
                             }}>
@@ -952,8 +1117,14 @@ const DeliveryAdmin = () => {
                     )}
                 </div>
 
+                {/* Pagination */}
                 {totalPages1 > 1 && currentItems1 && currentItems1.length > 0 && (
-                    <div style={{ justifySelf: 'center' }}>
+                    <div style={{ 
+                        display: 'flex',
+                        justifyContent: 'center',
+                        marginTop: '30px',
+                        paddingBottom: '20px'
+                    }}>
                         <CustomPagination
                             currentPage={currentPage1}
                             totalPages={totalPages1}

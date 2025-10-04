@@ -1516,114 +1516,123 @@ const ProductsAdmin = () => {
                                         </div>
 
                                         {/* Product Information */}
-                                        <div style={{ padding: '20px' }}>
-                                            {/* Product Name */}
-                                            <h3 style={{
-                                                margin: '0 0 10px 0',
-                                                fontSize: '18px',
-                                                fontWeight: '600',
-                                                color: '#212529',
-                                                lineHeight: '1.4'
-                                            }}>
-                                                {product.product_name}
-                                            </h3>
+                                        <div style={{
+                                            padding: '20px',
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            height: 'calc(100% - 200px)'
+                                        }}>
+                                            <div style={{ flex: '1' }}>
+                                                {/* Product Name */}
+                                                <h3 style={{
+                                                    margin: '0 0 10px 0',
+                                                    fontSize: '18px',
+                                                    fontWeight: '600',
+                                                    color: '#212529',
+                                                    lineHeight: '1.4'
+                                                }}>
+                                                    {product.product_name}
+                                                </h3>
 
-                                            {/* Product Description */}
-                                            <p style={{
-                                                margin: '0 0 15px 0',
-                                                fontSize: '14px',
-                                                color: '#6c757d',
-                                                lineHeight: '1.5',
-                                                display: '-webkit-box',
-                                                WebkitLineClamp: 2,
-                                                WebkitBoxOrient: 'vertical',
-                                                overflow: 'hidden'
-                                            }}>
-                                                {product.description}
-                                            </p>
+                                                {/* Product Description */}
+                                                <p style={{
+                                                    margin: '0 0 15px 0',
+                                                    fontSize: '14px',
+                                                    color: '#6c757d',
+                                                    lineHeight: '1.5',
+                                                    display: '-webkit-box',
+                                                    WebkitLineClamp: 2,
+                                                    WebkitBoxOrient: 'vertical',
+                                                    overflow: 'hidden'
+                                                }}>
+                                                    {product.description}
+                                                </p>
 
-                                            {/* Product Details Grid */}
+                                                {/* Product Details Grid */}
+                                                <div style={{
+                                                    display: 'grid',
+                                                    gridTemplateColumns: '1fr 1fr',
+                                                    gap: '10px',
+                                                    marginBottom: '15px'
+                                                }}>
+                                                    <div>
+                                                        <span style={{
+                                                            fontSize: '12px',
+                                                            color: '#6c757d',
+                                                            fontWeight: '500',
+                                                            display: 'block'
+                                                        }}>
+                                                            Color
+                                                        </span>
+                                                        <span style={{
+                                                            fontSize: '14px',
+                                                            color: '#495057',
+                                                            fontWeight: '500'
+                                                        }}>
+                                                            {product.color}
+                                                        </span>
+                                                    </div>
+
+                                                    <div>
+                                                        <span style={{
+                                                            fontSize: '12px',
+                                                            color: '#6c757d',
+                                                            fontWeight: '500',
+                                                            display: 'block'
+                                                        }}>
+                                                            Material
+                                                        </span>
+                                                        <span style={{
+                                                            fontSize: '14px',
+                                                            color: '#495057',
+                                                            fontWeight: '500'
+                                                        }}>
+                                                            {product.material}
+                                                        </span>
+                                                    </div>
+                                                </div>
+
+                                                {/* Dimensions */}
+                                                <div style={{ marginBottom: '15px' }}>
+                                                    <span style={{
+                                                        fontSize: '12px',
+                                                        color: '#6c757d',
+                                                        fontWeight: '500',
+                                                        display: 'block'
+                                                    }}>
+                                                        Dimensions
+                                                    </span>
+                                                    <span style={{
+                                                        fontSize: '14px',
+                                                        color: '#495057',
+                                                        fontWeight: '500'
+                                                    }}>
+                                                        {product.dimensions}
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            {/* Price and Sales - Fixed at bottom */}
                                             <div style={{
                                                 display: 'grid',
                                                 gridTemplateColumns: '1fr 1fr',
                                                 gap: '10px',
-                                                marginBottom: '15px'
-                                            }}>
-                                                <div>
-                                                    <span style={{
-                                                        fontSize: '12px',
-                                                        color: '#6c757d',
-                                                        fontWeight: '500',
-                                                        display: 'block'
-                                                    }}>
-                                                        Color
-                                                    </span>
-                                                    <span style={{
-                                                        fontSize: '14px',
-                                                        color: '#495057',
-                                                        fontWeight: '500'
-                                                    }}>
-                                                        {product.color}
-                                                    </span>
-                                                </div>
-
-                                                <div>
-                                                    <span style={{
-                                                        fontSize: '12px',
-                                                        color: '#6c757d',
-                                                        fontWeight: '500',
-                                                        display: 'block'
-                                                    }}>
-                                                        Material
-                                                    </span>
-                                                    <span style={{
-                                                        fontSize: '14px',
-                                                        color: '#495057',
-                                                        fontWeight: '500'
-                                                    }}>
-                                                        {product.material}
-                                                    </span>
-                                                </div>
-                                            </div>
-
-                                            {/* Dimensions */}
-                                            <div style={{ marginBottom: '15px' }}>
-                                                <span style={{
-                                                    fontSize: '12px',
-                                                    color: '#6c757d',
-                                                    fontWeight: '500',
-                                                    display: 'block'
-                                                }}>
-                                                    Dimensions
-                                                </span>
-                                                <span style={{
-                                                    fontSize: '14px',
-                                                    color: '#495057',
-                                                    fontWeight: '500'
-                                                }}>
-                                                    {product.dimensions}
-                                                </span>
-                                            </div>
-
-                                            {/* Price and Sales */}
-                                            <div style={{
-                                                display: 'flex',
-                                                justifyContent: 'space-between',
-                                                alignItems: 'center',
                                                 paddingTop: '15px',
-                                                borderTop: '1px solid #e9ecef'
+                                                borderTop: '1px solid #e9ecef',
+                                                marginTop: 'auto'
                                             }}>
                                                 <div>
                                                     <span style={{
                                                         fontSize: '12px',
                                                         color: '#6c757d',
                                                         fontWeight: '500',
-                                                        display: 'block'
+                                                        display: 'block',
+                                                        marginBottom: '4px'
                                                     }}>
                                                         Price
                                                     </span>
                                                     <span style={{
-                                                        fontSize: '20px',
+                                                        fontSize: '18px',
                                                         color: '#28a745',
                                                         fontWeight: '700'
                                                     }}>
@@ -1634,19 +1643,20 @@ const ProductsAdmin = () => {
                                                     </span>
                                                 </div>
 
-                                                <div style={{ textAlign: 'right' }}>
+                                                <div>
                                                     <span style={{
                                                         fontSize: '12px',
                                                         color: '#6c757d',
                                                         fontWeight: '500',
-                                                        display: 'block'
+                                                        display: 'block',
+                                                        marginBottom: '4px'
                                                     }}>
                                                         Total Sales
                                                     </span>
                                                     <span style={{
-                                                        fontSize: '16px',
+                                                        fontSize: '18px',
                                                         color: '#495057',
-                                                        fontWeight: '600'
+                                                        fontWeight: '700'
                                                     }}>
                                                         0
                                                     </span>

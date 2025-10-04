@@ -12,7 +12,7 @@ import CustomPagination from '@/app/Components/Pagination/pagination';
 import { AlertSucces } from '@/app/Components/SweetAlert/success';
 import { showAlertError } from '@/app/Components/SweetAlert/error';
 
-const ITEMS_PER_PAGE = 8;
+const ITEMS_PER_PAGE = 9;
 
 const Customer = () => {
   const [show, setShow] = useState(false);
@@ -57,69 +57,20 @@ const Customer = () => {
 
     setSortField(field);
     setSortDirection(direction);
-    setCurrentPage(1); // Reset to first page when sorting
-  };
-
-  // Render sort arrow
-  const renderSortArrow = (field) => {
-    if (sortField !== field) {
-      return (
-        <svg
-          width="20"
-          height="20"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          style={{ opacity: 0.3, marginLeft: '5px' }}
-        >
-          <path d="m7 14 5-5 5 5" />
-          <path d="m7 10 5 5 5-5" />
-        </svg>
-      );
-    }
-
-    return sortDirection === 'asc' ? (
-      <svg
-        width="20"
-        height="20"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        style={{ marginLeft: '5px' }}
-      >
-        <path d="m7 14 5-5 5 5" />
-      </svg>
-    ) : (
-      <svg
-        width="20"
-        height="20"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        style={{ marginLeft: '5px' }}
-      >
-        <path d="m7 10 5 5 5-5" />
-      </svg>
-    );
+    setCurrentPage(1);
   };
 
   // Filter and sort customers
   const filteredAndSortedCustomers = useMemo(() => {
     let filtered = customerList.filter(customer => {
-      // Customer name filter
       if (customerNameFilter && !customer.cust_name.toLowerCase().includes(customerNameFilter.toLowerCase())) {
         return false;
       }
 
-      // Address filter
       if (addressFilter && !customer.address.toLowerCase().includes(addressFilter.toLowerCase())) {
         return false;
       }
 
-      // Search filter
       if (searchFilter.trim()) {
         const searchTerm = searchFilter.toLowerCase();
         return customer.cust_name.toLowerCase().includes(searchTerm) ||
@@ -131,13 +82,11 @@ const Customer = () => {
       return true;
     });
 
-    // Apply sorting
     if (sortField) {
       filtered = [...filtered].sort((a, b) => {
         let aVal = a[sortField];
         let bVal = b[sortField];
 
-        // Handle different data types
         if (typeof aVal === 'string') {
           aVal = aVal.toLowerCase();
           bVal = bVal.toLowerCase();
@@ -159,7 +108,6 @@ const Customer = () => {
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
   const currentItems = filteredAndSortedCustomers.slice(startIndex, startIndex + ITEMS_PER_PAGE);
 
-  // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
   }, [customerNameFilter, addressFilter, searchFilter, sortField, sortDirection]);
@@ -377,8 +325,6 @@ const Customer = () => {
 
   return (
     <>
-
-
       <Modal show={!addCustomerVisible} onHide={close_modal} size='lg' >
         <Modal.Header closeButton >
           <Modal.Title >Add Customer</Modal.Title>
@@ -693,7 +639,9 @@ const Customer = () => {
           fontSize: '14px',
           display: 'flex',
           justifyContent: 'space-between',
-          alignItems: 'center'
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '10px'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
             <strong>Active Filters:</strong>
@@ -864,89 +812,351 @@ const Customer = () => {
           </div>
         </div>
 
-        {/* Customers Table */}
-        <div className='tableContainer' style={{ height: '40vh', overflowY: 'auto' }}>
+        {/* Sort Controls */}
+        <div style={{
+          padding: '10px 15px',
+          backgroundColor: '#ffffff',
+          borderRadius: '6px',
+          margin: '10px 0',
+          border: '1px solid #e9ecef',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '15px',
+          flexWrap: 'wrap'
+        }}>
+          <strong style={{ fontSize: '14px' }}>Sort by:</strong>
+          <button
+            onClick={() => handleSort('cust_name')}
+            style={{
+              padding: '6px 12px',
+              backgroundColor: sortField === 'cust_name' ? '#667eea' : '#f8f9fa',
+              color: sortField === 'cust_name' ? 'white' : '#495057',
+              border: '1px solid #dee2e6',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '13px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              transition: 'all 0.2s'
+            }}
+          >
+            Name {sortField === 'cust_name' && (sortDirection === 'asc' ? '↑' : '↓')}
+          </button>
+          <button
+            onClick={() => handleSort('address')}
+            style={{
+              padding: '6px 12px',
+              backgroundColor: sortField === 'address' ? '#667eea' : '#f8f9fa',
+              color: sortField === 'address' ? 'white' : '#495057',
+              border: '1px solid #dee2e6',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '13px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              transition: 'all 0.2s'
+            }}
+          >
+            Address {sortField === 'address' && (sortDirection === 'asc' ? '↑' : '↓')}
+          </button>
+        </div>
+
+        {/* Customer Cards Grid */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+          gap: '20px',
+          padding: '10px 0',
+          minHeight: '400px'
+        }}>
           {currentItems && currentItems.length > 0 ? (
-            <table className='table'>
-              <thead>
-                <tr>
-                  <th 
-                    className='t2'
-                    onClick={() => handleSort('cust_name')}
-                    style={{ cursor: 'pointer', userSelect: 'none' }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center' }}>
-                      <span>CUSTOMER NAME</span>
-                      {renderSortArrow('cust_name')}
+            currentItems.map((customer, i) => (
+              <div
+                key={i}
+                onClick={() => triggerModal('viewCustomer', customer.cust_id)}
+                style={{
+                  backgroundColor: '#ffffff',
+                  borderRadius: '12px',
+                  padding: '20px',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                  border: '1px solid #e9ecef',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s ease',
+                  position: 'relative',
+                  overflow: 'hidden'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-4px)';
+                  e.currentTarget.style.boxShadow = '0 8px 16px rgba(102, 126, 234, 0.15)';
+                  e.currentTarget.style.borderColor = '#667eea';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.08)';
+                  e.currentTarget.style.borderColor = '#e9ecef';
+                }}
+              >
+                {/* Decorative Top Border */}
+                <div style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: '4px',
+                  background: 'linear-gradient(90deg, #667eea 0%, #764ba2 100%)'
+                }}></div>
+
+                {/* Customer Avatar */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '15px',
+                  marginBottom: '15px'
+                }}>
+                  <div style={{
+                    width: '60px',
+                    height: '60px',
+                    borderRadius: '50%',
+                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'white',
+                    fontSize: '24px',
+                    fontWeight: '600',
+                    flexShrink: 0
+                  }}>
+                    {customer.cust_name.charAt(0).toUpperCase()}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <h3 style={{
+                      margin: 0,
+                      fontSize: '18px',
+                      fontWeight: '600',
+                      color: '#2c3e50',
+                      marginBottom: '4px',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap'
+                    }}>
+                      {customer.cust_name}
+                    </h3>
+                    <div style={{
+                      display: 'inline-block',
+                      padding: '2px 8px',
+                      backgroundColor: '#e7f3ff',
+                      color: '#0066cc',
+                      borderRadius: '12px',
+                      fontSize: '11px',
+                      fontWeight: '600'
+                    }}>
+                      ID: {customer.cust_id}
                     </div>
-                  </th>
-                  <th 
-                    className='t2'
-                    onClick={() => handleSort('email')}
-                    style={{ cursor: 'pointer', userSelect: 'none' }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center' }}>
-                      <span>EMAIL</span>
-                      {/* {renderSortArrow('email')} */}
+                  </div>
+                </div>
+
+                {/* Customer Details */}
+                <div style={{ marginBottom: '15px' }}>
+                  {/* Email */}
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '10px',
+                    marginBottom: '10px'
+                  }}>
+                    <div style={{
+                      color: '#667eea',
+                      marginTop: '2px',
+                      flexShrink: 0
+                    }}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <rect x="2" y="4" width="20" height="16" rx="2"/>
+                        <path d="m2 7 10 7 10-7"/>
+                      </svg>
                     </div>
-                  </th>
-                  <th 
-                    className='t2'
-                    onClick={() => handleSort('phone')}
-                    style={{ cursor: 'pointer', userSelect: 'none' }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center' }}>
-                      <span>PHONE</span>
-                      {/* {renderSortArrow('phone')} */}
-                    </div>
-                  </th>
-                  <th 
-                    className='t2'
-                    onClick={() => handleSort('address')}
-                    style={{ cursor: 'pointer', userSelect: 'none' }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center' }}>
-                      <span>ADDRESS</span>
-                      {renderSortArrow('address')}
-                    </div>
-                  </th>
-                  <th className='th1'>TOTAL PURCHASE</th>
-                  <th className='th1'>ACTION</th>
-                </tr>
-              </thead>
-              <tbody>
-                {currentItems.map((p, i) => (
-                  <tr className='table-row' key={i} onClick={() => triggerModal('viewCustomer', p.cust_id)}>
-                    <td className='td-name'>{p.cust_name}</td>
-                    <td>{p.email}</td>
-                    <td>{p.phone}</td>
-                    <td>{p.address && p.address.length > 30 ? p.address.substring(0, 30) + '...' : p.address}</td>
-                    <td style={{ textAlign: 'center' }}>0</td>
-                    <td>
-                      <span className='action-cust' onClick={(e) => {
-                        e.stopPropagation();
-                        triggerModal('editCustomerDetails', p.cust_id, e);
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{
+                        fontSize: '11px',
+                        color: '#6c757d',
+                        marginBottom: '2px',
+                        fontWeight: '500',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.5px'
                       }}>
-                        ✏️
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                        Email
+                      </div>
+                      <div style={{
+                        fontSize: '14px',
+                        color: '#495057',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
+                      }}>
+                        {customer.email}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Phone */}
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '10px',
+                    marginBottom: '10px'
+                  }}>
+                    <div style={{
+                      color: '#667eea',
+                      marginTop: '2px',
+                      flexShrink: 0
+                    }}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+                      </svg>
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{
+                        fontSize: '11px',
+                        color: '#6c757d',
+                        marginBottom: '2px',
+                        fontWeight: '500',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.5px'
+                      }}>
+                        Phone
+                      </div>
+                      <div style={{
+                        fontSize: '14px',
+                        color: '#495057',
+                        fontFamily: 'monospace'
+                      }}>
+                        {customer.phone}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Address */}
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '10px'
+                  }}>
+                    <div style={{
+                      color: '#667eea',
+                      marginTop: '2px',
+                      flexShrink: 0
+                    }}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+                        <circle cx="12" cy="10" r="3"/>
+                      </svg>
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{
+                        fontSize: '11px',
+                        color: '#6c757d',
+                        marginBottom: '2px',
+                        fontWeight: '500',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.5px'
+                      }}>
+                        Address
+                      </div>
+                      <div style={{
+                        fontSize: '13px',
+                        color: '#495057',
+                        lineHeight: '1.4',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical'
+                      }}>
+                        {customer.address}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Card Footer */}
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  paddingTop: '15px',
+                  borderTop: '1px solid #e9ecef',
+                  marginTop: '15px'
+                }}>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#28a745" strokeWidth="2">
+                      <circle cx="12" cy="12" r="10"/>
+                      <path d="M12 6v6l4 2"/>
+                    </svg>
+                    <span style={{
+                      fontSize: '12px',
+                      color: '#28a745',
+                      fontWeight: '600'
+                    }}>
+                      0 Purchases
+                    </span>
+                  </div>
+
+                  {/* Edit Button */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      triggerModal('editCustomerDetails', customer.cust_id, e);
+                    }}
+                    style={{
+                      width: '36px',
+                      height: '36px',
+                      borderRadius: '50%',
+                      border: '2px solid #667eea',
+                      backgroundColor: 'white',
+                      color: '#667eea',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transition: 'all 0.2s',
+                      fontSize: '16px'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = '#667eea';
+                      e.currentTarget.style.color = 'white';
+                      e.currentTarget.style.transform = 'scale(1.1)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'white';
+                      e.currentTarget.style.color = '#667eea';
+                      e.currentTarget.style.transform = 'scale(1)';
+                    }}
+                    title="Edit Customer"
+                  >
+                    ✏️
+                  </button>
+                </div>
+              </div>
+            ))
           ) : (
             <div style={{
+              gridColumn: '1 / -1',
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              height: '100%',
+              minHeight: '400px',
               textAlign: 'center',
               color: '#6c757d',
               padding: '40px 20px'
             }}>
               <div style={{
-                fontSize: '48px',
+                fontSize: '64px',
                 marginBottom: '20px',
                 opacity: 0.3
               }}>
@@ -976,7 +1186,12 @@ const Customer = () => {
 
         {/* Pagination */}
         {totalPages > 1 && currentItems && currentItems.length > 0 && (
-          <div style={{ justifySelf: 'center' }}>
+          <div style={{ 
+            display: 'flex',
+            justifyContent: 'center',
+            marginTop: '30px',
+            paddingBottom: '20px'
+          }}>
             <CustomPagination
               currentPage={currentPage}
               totalPages={totalPages}

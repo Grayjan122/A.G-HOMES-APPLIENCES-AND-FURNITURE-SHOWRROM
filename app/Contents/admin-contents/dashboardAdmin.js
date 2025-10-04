@@ -2380,9 +2380,9 @@ const DashboardAdmin = ({ onNavigateToSales }) => {
 
         const getAmountColor = (amount) => {
             if (amount >= averageAmount * 1.5) return '#10b981'; // High value - Green
-            if (amount >= averageAmount) return '#3b82f6'; // Above average - Blue
-            if (amount >= averageAmount * 0.5) return '#f59e0b'; // Below average - Orange
-            return '#ef4444'; // Low value - Red
+            if (amount >= averageAmount) return '#10b981'; // Above average - Blue
+            if (amount >= averageAmount * 0.5) return '#10b981'; // Below average - Orange
+            return '#10b981'; // Low value - Red
         };
 
         return (
