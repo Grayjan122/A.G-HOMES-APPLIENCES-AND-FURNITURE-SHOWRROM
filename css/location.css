@@ -1,0 +1,139 @@
+*{
+    padding: 0;
+    margin: 0;
+    /* overflow: hidden; */
+}
+.location-main{
+     width: 1260px;
+    /* height: 680px; */
+    /* max-height: 720px; */
+    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.2);
+    background-color: #F1F4E0;
+    margin-top: 100px;
+    margin-left: 250px;
+    /* overflow-y: scroll; */
+    padding: 20px;
+    padding-right: 10px;
+    /* border-radius: 5px; */
+    /* border-radius: 12px; */
+    position: relative;
+    /* added to contain absolute children */
+    /* padding-bottom: 200px; */
+    /* margin-bottom: 100px; */
+    /* padding-bottom: 10px; */
+
+}
+
+.h-location{
+    font-weight: bold;
+    /* justify-self: end; */
+    font-size: 40px;
+    
+    
+}.div-body-loc {
+    /* display: flex; */
+    width: 700px;
+    height: 200px;
+    /* border: 3px solid black; */
+    background-color: rgb(255, 255, 255);
+    border-radius: 5px;
+    /* float: left; */
+    position: absolute;
+    /* overflow-y: scroll; */
+    border-bottom: 3px solid black;
+    border-bottom-left-radius: 5px;
+    border-bottom-right-radius: 5px;
+    
+    /* margin-right: 10px; */
+
+
+    /* Adjust as needed */
+
+    /* Adjust as needed */
+    z-index: 10000;
+    /* Ensure it's above the table */
+
+
+}.add-loc {
+    /* display: flex; */
+    width: 700px;
+    height: 250px;
+    border: 3px solid black;
+    background-color: rgb(255, 255, 255);
+    border-radius: 5px;
+    /* float: left; */
+    position: absolute;
+
+    top: 200px;
+    /* Adjust as needed */
+    left: 450px;
+    /* Adjust as needed */
+    z-index: 10000;
+    /* Ensure it's above the table */
+
+
+
+}
+
+
+.div-body-loc-view {
+    /* display: flex; */
+    width: 700px;
+    height: 350px;
+    /* border: 3px solid black; */
+    background-color: rgb(255, 255, 255);
+    border-radius: 5px;
+    /* float: left; */
+    position: absolute;
+    /* overflow-y: scroll; */
+    border-bottom: 3px solid black;
+    border-bottom-left-radius: 5px;
+    border-bottom-right-radius: 5px;
+    
+    /* margin-right: 10px; */
+
+
+    /* Adjust as needed */
+
+    /* Adjust as needed */
+    z-index: 10000;
+    /* Ensure it's above the table */
+
+
+}.add-loc-view {
+    /* display: flex; */
+    width: 700px;
+    height: 250px;
+    border: 3px solid black;
+    background-color: rgb(255, 255, 255);
+    border-radius: 5px;
+    /* float: left; */
+    position: absolute;
+
+    top: 200px;
+    /* Adjust as needed */
+    left: 450px;
+    /* Adjust as needed */
+    z-index: 10000;
+    /* Ensure it's above the table */
+
+
+
+}.add-loc-bttn {
+    width: 130px;
+    height: 40px;
+    border-radius: 5px;
+    font-weight: bold;
+    color: white;
+    background-color: #42CAD6;
+    border: 0px;
+    margin-left: 455px;
+}.add-pro-bttn:hover {
+    background-color: blue;
+}
+
+.double-header{
+    display: flex;
+    flex-direction: row;
+    gap: 40px;
+}

@@ -1,0 +1,27 @@
+*{
+    padding: 0;
+    margin: 0;
+    /* overflow: hidden; */
+}
+.analytics-main{
+    width: 1220px;
+    height: 680px;
+    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.2);
+    background-color: #F1F4E0;
+    margin-top: 100px;
+    margin-left: 250px;
+    /* overflow-y: scroll; */
+    padding: 20px;
+    border-radius: 5px;
+    border-radius: 12px;
+    
+
+}
+
+.h-analytics{
+    font-weight: bold;
+    /* justify-self: end; */
+    font-size: 40px;
+    
+    
+}

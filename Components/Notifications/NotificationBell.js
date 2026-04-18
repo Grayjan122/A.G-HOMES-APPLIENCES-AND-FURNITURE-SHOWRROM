@@ -1,0 +1,457 @@
+'use client';
+import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
+import axios from 'axios';
+import './notifications.css';
+
+const NotificationBell = () => {
+    const [notifications, setNotifications] = useState([]);
+    const [unreadCount, setUnreadCount] = useState(0);
+    const [showDropdown, setShowDropdown] = useState(false);
+    const [showAllModal, setShowAllModal] = useState(false);
+    const [loading, setLoading] = useState(false);
+    const dropdownRef = useRef(null);
+    const bellButtonRef = useRef(null);
+    const [userRole, setUserRole] = useState('');
+
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            setUserRole(sessionStorage.getItem('user_role') || '');
+            fetchNotifications();
+            
+            // Poll for new notifications every 30 seconds
+            const interval = setInterval(() => {
+                fetchNotifications();
+            }, 30000);
+
+            return () => clearInterval(interval);
+        }
+    }, []);
+
+    // Close dropdown when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (
+                dropdownRef.current && 
+                !dropdownRef.current.contains(event.target) &&
+                bellButtonRef.current &&
+                !bellButtonRef.current.contains(event.target)
+            ) {
+                setShowDropdown(false);
+            }
+        };
+
+        if (showDropdown) {
+            document.addEventListener('mousedown', handleClickOutside);
+            return () => document.removeEventListener('mousedown', handleClickOutside);
+        }
+    }, [showDropdown]);
+
+    const fetchNotifications = async () => {
+        if (typeof window === 'undefined') return;
+        
+        const baseURL = sessionStorage.getItem('baseURL');
+        if (!baseURL) return;
+
+        try {
+            const locationId = sessionStorage.getItem('location_id');
+            const role = sessionStorage.getItem('user_role');
+            const accountId = sessionStorage.getItem('user_id');  // Fixed: was 'account_id', should be 'user_id'
+            
+            console.log('Fetching notifications with:', { locationId, role, accountId });
+            
+            const response = await axios.get(baseURL + 'notifications.php', {
+                params: {
+                    operation: 'GetNotifications',
+                    json: JSON.stringify({
+                        locationId: locationId,
+                        role: role,
+                        accountId: accountId
+                    })
+                }
+            });
+
+            console.log('Notifications response:', response.data);
+
+            if (response.data && Array.isArray(response.data)) {
+                setNotifications(response.data);
+                // Fix: is_read comes from DB as "0" or "1" (string), so use == 0 instead of !n.is_read
+                const unread = response.data.filter(n => n.is_read == 0 || n.is_read === false).length;
+                setUnreadCount(unread);
+                console.log(`Found ${response.data.length} notifications, ${unread} unread`);
+            }
+        } catch (error) {
+            console.error('Error fetching notifications:', error);
+        }
+    };
+
+    const markAsRead = async (notificationId) => {
+        if (typeof window === 'undefined') return;
+        
+        const baseURL = sessionStorage.getItem('baseURL');
+        if (!baseURL) return;
+
+        try {
+            await axios.get(baseURL + 'notifications.php', {
+                params: {
+                    operation: 'MarkAsRead',
+                    json: JSON.stringify({ notificationId })
+                }
+            });
+
+            // Update local state
+            setNotifications(prev => 
+                prev.map(n => n.notification_id === notificationId ? {...n, is_read: 1} : n)
+            );
+            setUnreadCount(prev => Math.max(0, prev - 1));
+        } catch (error) {
+            console.error('Error marking notification as read:', error);
+        }
+    };
+
+    const markAllAsRead = async () => {
+        if (typeof window === 'undefined') return;
+        
+        const baseURL = sessionStorage.getItem('baseURL');
+        if (!baseURL) return;
+
+        try {
+            await axios.get(baseURL + 'notifications.php', {
+                params: {
+                    operation: 'MarkAllAsRead',
+                    json: JSON.stringify({
+                        locationId: sessionStorage.getItem('location_id'),
+                        accountId: sessionStorage.getItem('user_id')  // Fixed: was 'account_id', should be 'user_id'
+                    })
+                }
+            });
+
+            // Update local state
+            setNotifications(prev => prev.map(n => ({...n, is_read: 1})));
+            setUnreadCount(0);
+        } catch (error) {
+            console.error('Error marking all as read:', error);
+        }
+    };
+
+    const getNotificationIcon = (type) => {
+        switch(type) {
+            case 'stock_request':
+                return '📦';
+            case 'delivery':
+                return '🚚';
+            case 'out_of_stock':
+                return '⚠️';
+            case 'payment_due':
+                return '💰';
+            case 'overdue':
+                return '🔴';
+            case 'user_setup':
+                return '👤';
+            default:
+                return '🔔';
+        }
+    };
+
+    const getNotificationColor = (type) => {
+        switch(type) {
+            case 'stock_request':
+                return '#007bff';
+            case 'delivery':
+                return '#28a745';
+            case 'out_of_stock':
+                return '#ffc107';
+            case 'payment_due':
+                return '#17a2b8';
+            case 'overdue':
+                return '#dc3545';
+            case 'user_setup':
+                return '#6f42c1';
+            default:
+                return '#6c757d';
+        }
+    };
+
+    const formatTimeAgo = (dateString) => {
+        // Backend stores timestamps in Asia/Manila timezone (UTC+8)
+        // Format: "2025-10-26 13:36:20"
+        
+        try {
+            // Parse the date string (YYYY-MM-DD HH:MM:SS)
+            const parts = dateString.match(/(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})/);
+            if (!parts) return 'Just now';
+            
+            const [, year, month, day, hour, minute, second] = parts;
+            
+            // Manila time is UTC+8
+            // If backend says "13:36:20" in Manila, the UTC time is "05:36:20"
+            // Method: Parse as UTC, then subtract 8 hours
+            const manilaTimeAsUTC = Date.UTC(
+                parseInt(year), 
+                parseInt(month) - 1, 
+                parseInt(day), 
+                parseInt(hour), 
+                parseInt(minute), 
+                parseInt(second)
+            );
+            
+            // Convert Manila time to actual UTC by subtracting 8 hours (8 * 60 * 60 * 1000 ms)
+            const actualUTC = manilaTimeAsUTC - (8 * 60 * 60 * 1000);
+            
+            // Get current time in UTC
+            const nowUTC = Date.now();
+            
+            // Calculate difference in seconds
+            const seconds = Math.floor((nowUTC - actualUTC) / 1000);
+            
+            // Debug logs (remove after testing)
+            console.log('DEBUG TIME:', {
+                original: dateString,
+                manilaAsUTC: new Date(manilaTimeAsUTC).toISOString(),
+                actualUTC: new Date(actualUTC).toISOString(),
+                now: new Date(nowUTC).toISOString(),
+                secondsAgo: seconds
+            });
+            
+            // Handle edge cases
+            if (seconds < 0) return 'Just now';
+            if (isNaN(seconds)) return 'Just now';
+            if (seconds < 60) return 'Just now';
+            if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+            if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+            if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
+            
+            // For older dates, show the actual date
+            return new Date(actualUTC).toLocaleDateString();
+        } catch (error) {
+            console.error('Error formatting time:', error);
+            return 'Just now';
+        }
+    };
+
+    const getDropdownPosition = () => {
+        if (bellButtonRef.current) {
+            const rect = bellButtonRef.current.getBoundingClientRect();
+            return {
+                top: rect.bottom + 8,
+                right: window.innerWidth - rect.right
+            };
+        }
+        return { top: 0, right: 0 };
+    };
+
+    return (
+        <div className="notification-bell-container">
+            <button 
+                ref={bellButtonRef}
+                className="notification-bell-button"
+                onClick={() => setShowDropdown(!showDropdown)}
+                title="Notifications"
+            >
+                <svg 
+                    width="24" 
+                    height="24" 
+                    viewBox="0 0 24 24" 
+                    fill="none" 
+                    stroke="currentColor" 
+                    strokeWidth="2"
+                >
+                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                    <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                </svg>
+                {unreadCount > 0 && (
+                    <span className="notification-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>
+                )}
+            </button>
+
+            {showDropdown && typeof document !== 'undefined' && createPortal(
+                <div 
+                    ref={dropdownRef}
+                    className="notification-dropdown"
+                    style={{
+                        position: 'fixed',
+                        top: `${getDropdownPosition().top}px`,
+                        right: `${getDropdownPosition().right}px`
+                    }}
+                >
+                    <div className="notification-header">
+                        <h3>Notifications</h3>
+                        {unreadCount > 0 && (
+                            <button 
+                                className="mark-all-read-btn"
+                                onClick={markAllAsRead}
+                            >
+                                Mark all as read
+                            </button>
+                        )}
+                    </div>
+
+                    <div className="notification-list">
+                        {notifications.length === 0 ? (
+                            <div className="no-notifications">
+                                <span className="no-notif-icon">🔔</span>
+                                <p>No notifications</p>
+                            </div>
+                        ) : (
+                            notifications.map((notif) => {
+                                // Fix: is_read comes from DB as "0" or "1" (string), convert to boolean
+                                const isUnread = notif.is_read == 0 || notif.is_read === false;
+                                return (
+                                    <div 
+                                        key={notif.notification_id}
+                                        className={`notification-item ${isUnread ? 'unread' : ''}`}
+                                        onClick={() => {
+                                            if (isUnread) {
+                                                markAsRead(notif.notification_id);
+                                            }
+                                        }}
+                                    >
+                                        <div 
+                                            className="notification-icon"
+                                            style={{ backgroundColor: getNotificationColor(notif.type) }}
+                                        >
+                                            {getNotificationIcon(notif.type)}
+                                        </div>
+                                        <div className="notification-content">
+                                            <div className="notification-title">{notif.title}</div>
+                                            <div className="notification-message">{notif.message}</div>
+                                            <div className="notification-time">{formatTimeAgo(notif.created_at)}</div>
+                                        </div>
+                                        {isUnread && <div className="unread-dot"></div>}
+                                    </div>
+                                );
+                            })
+                        )}
+                    </div>
+
+                    {notifications.length > 0 && (
+                        <div className="notification-footer">
+                            <button 
+                                className="view-all-btn"
+                                onClick={() => {
+                                    setShowDropdown(false);
+                                    setShowAllModal(true);
+                                }}
+                            >
+                                View all notifications
+                            </button>
+                        </div>
+                    )}
+                </div>,
+                document.body
+            )}
+
+            {/* View All Notifications Modal */}
+            {showAllModal && typeof document !== 'undefined' && createPortal(
+                <div 
+                    className="notification-modal-overlay"
+                    onClick={() => setShowAllModal(false)}
+                    style={{
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                        zIndex: 10000,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '20px'
+                    }}
+                >
+                    <div 
+                        className="notification-modal-content"
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                            backgroundColor: 'white',
+                            borderRadius: '12px',
+                            width: '100%',
+                            maxWidth: '800px',
+                            maxHeight: '90vh',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)'
+                        }}
+                    >
+                        <div className="notification-header" style={{ borderRadius: '12px 12px 0 0' }}>
+                            <h3>All Notifications</h3>
+                            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                                {unreadCount > 0 && (
+                                    <button 
+                                        className="mark-all-read-btn"
+                                        onClick={markAllAsRead}
+                                    >
+                                        Mark all as read
+                                    </button>
+                                )}
+                                <button 
+                                    onClick={() => setShowAllModal(false)}
+                                    style={{
+                                        background: 'rgba(255, 255, 255, 0.2)',
+                                        border: '1px solid rgba(255, 255, 255, 0.3)',
+                                        color: 'white',
+                                        padding: '6px 12px',
+                                        borderRadius: '6px',
+                                        fontSize: '12px',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        e.target.style.background = 'rgba(255, 255, 255, 0.3)';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.target.style.background = 'rgba(255, 255, 255, 0.2)';
+                                    }}
+                                >
+                                    Close
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="notification-list" style={{ flex: 1, overflowY: 'auto', maxHeight: 'calc(90vh - 120px)' }}>
+                            {notifications.length === 0 ? (
+                                <div className="no-notifications">
+                                    <span className="no-notif-icon">🔔</span>
+                                    <p>No notifications</p>
+                                </div>
+                            ) : (
+                                notifications.map((notif) => {
+                                    const isUnread = notif.is_read == 0 || notif.is_read === false;
+                                    return (
+                                        <div 
+                                            key={notif.notification_id}
+                                            className={`notification-item ${isUnread ? 'unread' : ''}`}
+                                            onClick={() => {
+                                                if (isUnread) {
+                                                    markAsRead(notif.notification_id);
+                                                }
+                                            }}
+                                        >
+                                            <div 
+                                                className="notification-icon"
+                                                style={{ backgroundColor: getNotificationColor(notif.type) }}
+                                            >
+                                                {getNotificationIcon(notif.type)}
+                                            </div>
+                                            <div className="notification-content">
+                                                <div className="notification-title">{notif.title}</div>
+                                                <div className="notification-message">{notif.message}</div>
+                                                <div className="notification-time">{formatTimeAgo(notif.created_at)}</div>
+                                            </div>
+                                            {isUnread && <div className="unread-dot"></div>}
+                                        </div>
+                                    );
+                                })
+                            )}
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
+        </div>
+    );
+};
+
+export default NotificationBell;
+

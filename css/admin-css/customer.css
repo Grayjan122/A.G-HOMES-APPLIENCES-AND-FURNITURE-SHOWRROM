@@ -1,0 +1,393 @@
+*{
+    padding: 0;
+    margin: 0;
+    /* overflow: hidden; */
+}
+.black-bg-cust {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: #000;
+    opacity: 0.6;
+    /* optional for transparency effect */
+    z-index: 9999;
+    /* very high to ensure it's on top */
+}
+
+
+.customer-main{
+    width: 1220px;
+    height: 680px;
+    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.2);
+    background-color: #F1F4E0;
+    margin-top: 100px;
+    margin-left: 250px;
+    /* overflow-y: scroll; */
+    padding: 20px;
+    border-radius: 5px;
+    border-radius: 12px;
+    
+
+}.customer-header{
+    display: flex;
+    justify-content: space-between;
+}
+
+.h-customer{
+    font-weight: bold;
+    /* justify-self: end; */
+    font-size: 40px;
+    
+    
+}.add-cust-bttn {
+    width: 130px;
+    height: 40px;
+    border-radius: 5px;
+    font-weight: bold;
+    color: white;
+    background-color: #42CAD6;
+    border: 0px;
+    /* margin-left: 455px; */
+}.add-cust-bttn:hover {
+    background-color: blue;
+}
+
+
+/* filter and search */
+.search-customer{
+    margin-top: 40px;
+    display: flex;
+    flex-direction: row;
+    gap: 40px;
+    border: 0px;
+    justify-content: space-between;
+
+}.filter{
+    display: flex;
+    flex-direction: row;
+    gap: 40px;
+    border: 0px;
+    /* justify-content: space-between; */
+}
+.search {
+    justify-self: end;
+    margin-left: 80px;
+}
+
+.search-in {
+    height: 30px;
+    padding-left: 5px;
+    border: 0px;
+    background-color: #beedf3;
+    border-radius: 5px;
+
+}
+
+.label {
+    font-size: 20px;
+    font-weight: bold;
+}
+
+.s {
+    width: 120px;
+    height: 30px;
+    font-size: 15px;
+    border: 0px;
+    border-radius: 5px;
+    background-color: #beedf3;
+    padding-left: 2px;
+
+}
+
+
+/* table */
+.tableContainer-cust {
+    height: 540px;
+    overflow-y: auto;
+    border-radius: 6px;
+    margin-top: 20px;
+    background-color: #f9f9d8;
+    border: 2px solid black;
+}
+
+.table-cust {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.table-row-cust {
+    transition: background-color 0.3s ease;
+    cursor: pointer;
+}
+
+.table-row-cust:hover td{
+    background-color: #53effd;
+}
+
+
+td {
+    /* border: 1px solid black; */
+    padding: 12px 10px;
+    text-align: center;
+    font-size: 14px;
+}
+
+th {
+    position: sticky;
+    top: 0;
+    background-color: #00bcd4;
+    color: #000;
+    font-weight: bold;
+    z-index: 1;
+    height: 40px;
+    /* border-bottom: 2px solid black; */
+    /* border-right: 2px solid black; */
+    z-index: 2;
+    /* ensure it's above scrolling content */
+
+}
+
+td {
+    background-color: #ffffff;
+}
+
+.action-cust {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    font-size: 25px;
+    cursor: pointer;
+}.action-cust:hover{
+    text-decoration: underline;
+}
+
+
+/* add-modal */
+
+
+.div-input-add-cust {
+    margin-top: 20px;
+    display: flex;
+    flex-direction: column;
+    margin-left: 30px;
+    gap: 5px;
+    margin-bottom: 30px;
+
+}
+
+.add-cust-header {
+    width: 100%;
+    height: 100px;
+    /* border: 2px solid rgb(123, 42, 42); */
+    background-color: #42CAD6;
+    border-top-left-radius: 2px;
+    border-top-right-radius: 2px;
+    border-top-color: black;
+    border-bottom: 3px solid black;
+    /* border: 2px solid black; */
+    /* border-bottom: 0px; */
+    margin-bottom: 20px;
+}
+
+.div-body-cust {
+    /* display: flex; */
+    width: 700px;
+    height: 350px;
+    /* border: 3px solid black; */
+    background-color: rgb(255, 255, 255);
+    border-radius: 5px;
+    /* float: left; */
+    position: absolute;
+    overflow-y: scroll;
+    border-bottom: 3px solid black;
+    border-bottom-left-radius: 5px;
+    border-bottom-right-radius: 5px;
+    
+    /* margin-right: 10px; */
+
+
+    /* Adjust as needed */
+
+    /* Adjust as needed */
+    z-index: 10000;
+    /* Ensure it's above the table */
+
+
+}.add-cust {
+    /* display: flex; */
+    width: 700px;
+    height: 450px;
+    border: 3px solid black;
+    background-color: rgb(255, 255, 255);
+    border-radius: 5px;
+    /* float: left; */
+    position: absolute;
+
+    top: 120px;
+    /* Adjust as needed */
+    left: 450px;
+    /* Adjust as needed */
+    z-index: 10000;
+    /* Ensure it's above the table */
+
+
+
+}.div-for-line-cust {
+    /* display: flex; */
+    /* justify-content: space-evenly; */
+    gap: 50px;
+    /* margin-left: -20px; */
+
+}
+
+.div-input-add-cust {
+    margin-top: 20px;
+    display: flex;
+    flex-direction: column;
+    margin-left: 30px;
+    gap: 5px;
+
+}
+
+.add-cust-label {
+    font-size: 25px;
+    font-weight: bold;
+   
+}
+.add-cust-label-1 {
+    font-size: 25px;
+    font-weight: bold;
+    margin-left: 30px;
+  
+}
+
+
+.cust-name-input {
+    width: 98%;
+
+    border-radius: 5px;
+    background-color: #D9D9D9;
+    border: 0px;
+    height: 50px;
+    padding-left: 5px;
+    font-size: 20px;
+}
+
+.description-input-cust {
+    width: 98%;
+    border-radius: 5px;
+    background-color: #D9D9D9;
+    border: 0px;
+    height: 100px;
+    /* padding-left: 5px; */
+    display: block;
+    padding: 5px;
+    min-height: 100px;
+    max-width: 98%;
+    min-width: 98%;
+    font-size: 20px;
+
+
+
+}
+
+
+.div-d-label {
+    margin-top: 15px;
+    /* margin-bottom: 10px; */
+}
+
+.d-label {
+    font-size: 25px;
+    font-weight: bold;
+    margin-left: 30px;
+
+}
+
+.dimension-input {
+    width: 98%;
+
+    border-radius: 5px;
+    background-color: #D9D9D9;
+    border: 0px;
+    height: 50px;
+    padding-left: 5px;
+    font-size: 20px;
+
+
+}
+.add-customer {
+    /* display: flex; */
+    width: 700px;
+    height: 600px;
+    border: 3px solid black;
+    background-color: rgb(255, 255, 255);
+    border-radius: 5px;
+    /* float: left; */
+    position: absolute;
+
+    top: 40px;
+    /* Adjust as needed */
+    left: 160px;
+    /* Adjust as needed */
+    z-index: 10000;
+    /* Ensure it's above the table */
+
+
+
+}
+
+.add-customer-header {
+    width: 100%;
+    height: 100px;
+    /* border: 2px solid rgb(123, 42, 42); */
+    background-color: #42CAD6;
+    border-top-left-radius: 2px;
+    border-top-right-radius: 2px;
+    border-top-color: black;
+    border-bottom: 3px solid black;
+    /* border: 2px solid black; */
+    /* border-bottom: 0px; */
+}
+
+.div-body-cust {
+    /* display: flex; */
+    width: 700px;
+    height: 500px;
+    /* border: 3px solid black; */
+    background-color: rgb(255, 255, 255);
+    border-radius: 5px;
+    /* float: left; */
+    position: absolute;
+    overflow-y: scroll;
+    border-bottom: 3px solid black;
+    border-bottom-left-radius: 5px;
+    border-bottom-right-radius: 5px;
+    /* margin-right: 10px; */
+
+
+    /* Adjust as needed */
+
+    /* Adjust as needed */
+    z-index: 10000;
+    /* Ensure it's above the table */
+
+
+}
+
+.close-btn-cust {
+    font-size: 50px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    position: absolute;
+    top: -5px;
+    right: 10px;
+    color: black;
+}
+
+.close-btn-cust:hover {
+    color: red;
+}
